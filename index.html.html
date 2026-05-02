@@ -149,18 +149,7 @@ body{background:#0a0e0a;font-family:'Courier New',monospace;overflow:hidden;widt
 </head>
 <body>
 <script>
-(function() {
-  function frozenArr() { var a = []; a.push = function() { return 0; }; return a; }
-  var _locked = {};
-  ['fish','fishes','FISH','fishList'].forEach(function(k) {
-    _locked[k] = frozenArr();
-    try { Object.defineProperty(window, k, { get: function() { return _locked[k]; }, set: function() {}, configurable: true }); } catch(e) {}
-  });
-  var _noop = function() {};
-  ['drawFish','updateFish','spawnFish','addFish','createFish','drawFishes','updateFishes'].forEach(function(fn) {
-    try { Object.defineProperty(window, fn, { get: function() { return _noop; }, set: function() {}, configurable: true }); } catch(e) {}
-  });
-})();
+/* fish removed - birds added */
 </script>
 
 <!-- INTRO SCREEN -->
@@ -2137,78 +2126,77 @@ function drawRiverSegment(cx,x1,y1,x2,y2,w=60){
   // water highlight
   cx.strokeStyle='rgba(180,240,255,0.14)'; cx.lineWidth=w*0.3;
   cx.beginPath(); cx.moveTo(x1,y1); cx.lineTo(x2,y2); cx.stroke();
-  // FISH drawing along this segment
+  // BIRDS flying above this segment
   _drawFishOnSegment(cx, x1, y1, x2, y2, w);
 }
 
-// Draw animated fish swimming along a river segment
+// Draw animated birds flying in the sky near rivers
 function _drawFishOnSegment(cx, x1, y1, x2, y2, riverW) {
-  const t = Date.now() / 1000;
-  const segLen = Math.hypot(x2-x1, y2-y1);
-  if(segLen < 150) return; // skip very short segments
-  const numFish = Math.max(1, Math.floor(segLen / 280));
-  const dx = (x2-x1)/segLen, dy = (y2-y1)/segLen;
-  // perpendicular
-  const px = -dy, py = dx;
-  const fishColors = ['#f0a820','#e87830','#40c8e0','#e84040','#60e060'];
-  for(let fi=0; fi<numFish; fi++){
-    // Each fish has a unique seed for varied timing
-    const seed = fi * 137.508 + (x1 * 0.01 + y1 * 0.01);
-    // Fish position along segment (0..1), animated
-    const speed = 0.12 + (fi % 3) * 0.06;
-    const dir = fi % 2 === 0 ? 1 : -1; // some swim opposite direction
-    const along = ((t * speed * dir + seed) % 1 + 1) % 1;
-    // Gentle sideways wobble
-    const wobble = Math.sin(t * 3.5 + seed) * (riverW * 0.18);
-    const fx = x1 + along * (x2-x1) + px * wobble;
-    const fy = y1 + along * (y2-y1) + py * wobble;
-    // Fish facing angle
-    const wobbleAng = Math.cos(t * 3.5 + seed) * 0.25;
-    const fishAng = Math.atan2(dy, dx) * dir + wobbleAng + (dir < 0 ? Math.PI : 0);
-    const col = fishColors[(fi + Math.floor(seed)) % fishColors.length];
-    _drawFish(cx, fx, fy, fishAng, col, 5 + (fi % 3) * 2);
+  // Birds fly ABOVE the river path area
+  var t = Date.now() / 1000;
+  var segLen = Math.hypot(x2-x1, y2-y1);
+  if(segLen < 200) return;
+  var numBirds = Math.max(1, Math.floor(segLen / 350));
+  var dx = (x2-x1)/segLen, dy = (y2-y1)/segLen;
+  var px = -dy, py = dx;
+  var birdColors = ['#1a1a1a','#3a2a1a','#2a2a3a','#4a3a2a','#1a2a1a'];
+  for(var bi=0; bi<numBirds; bi++){
+    var seed = bi * 137.508 + (x1 * 0.01 + y1 * 0.01);
+    var speed = 0.08 + (bi % 3) * 0.04;
+    var dir = bi % 2 === 0 ? 1 : -1;
+    var along = ((t * speed * dir + seed) % 1 + 1) % 1;
+    var wobbleY = Math.sin(t * 2.5 + seed) * 30;
+    var wobbleX = Math.sin(t * 1.8 + seed * 2) * (riverW * 0.4);
+    var bx = x1 + along * (x2-x1) + px * wobbleX;
+    var by = y1 + along * (y2-y1) + py * wobbleX - 60 + wobbleY;
+    var col = birdColors[(bi + Math.floor(seed)) % birdColors.length];
+    var sz = 4 + (bi % 3) * 2;
+    _drawBird(cx, bx, by, t + seed, col, sz, dir);
   }
 }
 
-// Draw a single fish at position with given angle, color, size
-function _drawFish(cx, x, y, angle, col, size) {
+function _drawBird(cx, x, y, t, col, size, dir) {
   cx.save();
   cx.translate(x, y);
-  cx.rotate(angle);
-  cx.globalAlpha = 0.82;
+  if(dir < 0) cx.scale(-1, 1);
+  cx.globalAlpha = 0.85;
+  var wingFlap = Math.sin(t * 6) * 0.5;
   // Body
   cx.fillStyle = col;
   cx.beginPath();
-  cx.ellipse(0, 0, size, size * 0.48, 0, 0, Math.PI * 2);
+  cx.ellipse(0, 0, size * 1.2, size * 0.35, 0, 0, Math.PI * 2);
   cx.fill();
-  // Belly highlight
-  cx.fillStyle = 'rgba(255,255,255,0.3)';
+  // Left wing
   cx.beginPath();
-  cx.ellipse(-size*0.1, -size*0.1, size*0.55, size*0.22, 0, 0, Math.PI*2);
+  cx.moveTo(-size * 0.3, 0);
+  cx.quadraticCurveTo(-size * 1.5, -size * (1.2 + wingFlap), -size * 2.2, -size * (0.3 + wingFlap * 0.5));
+  cx.quadraticCurveTo(-size * 1.2, -size * 0.1, -size * 0.3, 0);
   cx.fill();
-  // Tail fin
+  // Right wing
+  cx.beginPath();
+  cx.moveTo(size * 0.3, 0);
+  cx.quadraticCurveTo(size * 1.5, -size * (1.2 + wingFlap), size * 2.2, -size * (0.3 + wingFlap * 0.5));
+  cx.quadraticCurveTo(size * 1.2, -size * 0.1, size * 0.3, 0);
+  cx.fill();
+  // Head
+  cx.beginPath();
+  cx.arc(size * 1.1, -size * 0.15, size * 0.3, 0, Math.PI * 2);
+  cx.fill();
+  // Beak
+  cx.fillStyle = '#cc8800';
+  cx.beginPath();
+  cx.moveTo(size * 1.35, -size * 0.15);
+  cx.lineTo(size * 1.7, -size * 0.05);
+  cx.lineTo(size * 1.35, size * 0.05);
+  cx.closePath();
+  cx.fill();
+  // Tail
   cx.fillStyle = col;
   cx.beginPath();
-  cx.moveTo(-size, 0);
-  cx.lineTo(-size*1.7, -size*0.6);
-  cx.lineTo(-size*1.7, size*0.6);
+  cx.moveTo(-size * 1.1, 0);
+  cx.lineTo(-size * 1.8, -size * 0.4);
+  cx.lineTo(-size * 1.9, size * 0.1);
   cx.closePath();
-  cx.fill();
-  // Dorsal fin
-  cx.beginPath();
-  cx.moveTo(-size*0.1, -size*0.48);
-  cx.lineTo(size*0.3, -size*0.9);
-  cx.lineTo(size*0.6, -size*0.48);
-  cx.closePath();
-  cx.fill();
-  // Eye
-  cx.fillStyle = '#111';
-  cx.beginPath();
-  cx.arc(size * 0.5, -size * 0.1, size * 0.14, 0, Math.PI * 2);
-  cx.fill();
-  cx.fillStyle = 'rgba(255,255,255,0.7)';
-  cx.beginPath();
-  cx.arc(size * 0.52, -size * 0.13, size * 0.05, 0, Math.PI * 2);
   cx.fill();
   cx.globalAlpha = 1;
   cx.restore();
@@ -6092,687 +6080,211 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
 
 <script>
 (function(){
-  // ══ PLANE IMAGE — preload ══
-  var __planeImg = new Image();
-  __planeImg.crossOrigin = 'anonymous';
-  __planeImg.src = 'https://media.base44.com/images/public/69f5272df2323a03cfe7a389/74894ec6b_image.png';
-
   function waitReady(cb){
-    if(typeof drawRiverSegment!=='undefined'&&typeof drawMap!=='undefined'&&typeof G!=='undefined'){cb();}
-    else{setTimeout(function(){waitReady(cb);},100);}
+    if(typeof window.drawMap!=='undefined'&&typeof cx!=='undefined'&&typeof MAP!=='undefined') cb();
+    else setTimeout(function(){waitReady(cb);},100);
   }
   waitReady(function(){
-
-    // ══ 1. REMOVE FISH ══
-    window._drawFishOnSegment=function(){};
-    window._drawFish=function(){};
-
-    // ══ 2. REPLACE DRONE WITH PLANE ══
-    // Override _drawDroneScreen and drawDroneOverlay to draw the biplane image
-    function _drawPlaneScreen(){
-      if(typeof G==='undefined'||!G.droneWX&&G.droneWX!==0) return;
-      var sx = G.droneWX - G.camX + W/2;
-      var sy = G.droneWY - G.camY + H/2;
-      var t  = G.frameN||0;
-
-      cx.save();
-      cx.resetTransform();
-
-      if(sx < -400 || sx > W+400 || sy < -300 || sy > H+300){ cx.restore(); return; }
-
-      // Propeller spin glow
-      var spinA = (t * 0.35) % (Math.PI*2);
-      var propX = sx - 90, propY = sy + 5;
-      var pg = cx.createRadialGradient(propX,propY,2,propX,propY,38);
-      pg.addColorStop(0,'rgba(255,200,80,0.6)');
-      pg.addColorStop(0.5,'rgba(255,140,20,0.2)');
-      pg.addColorStop(1,'rgba(0,0,0,0)');
-      cx.fillStyle=pg; cx.beginPath(); cx.ellipse(propX,propY,38,28,0,0,Math.PI*2); cx.fill();
-      // Propeller blades
-      cx.strokeStyle='rgba(80,50,20,0.7)'; cx.lineWidth=4; cx.lineCap='round';
-      for(var b=0;b<2;b++){
-        var a=spinA+b*Math.PI;
-        cx.beginPath(); cx.moveTo(propX+Math.cos(a)*4,propY+Math.sin(a)*4);
-        cx.lineTo(propX+Math.cos(a)*34,propY+Math.sin(a)*26); cx.stroke();
-      }
-
-      // Engine sparkle trail
-      for(var si=0;si<5;si++){
-        var sphase=((t*0.07)+si*0.2)%1;
-        cx.globalAlpha=(1-sphase)*0.7;
-        cx.fillStyle='#ffd700';
-        cx.beginPath();
-        cx.arc(sx+90+sphase*50, sy+8+Math.sin(sphase*8+si)*12, 2+si%3, 0, Math.PI*2);
-        cx.fill();
-      }
-      cx.globalAlpha=1;
-
-      // Draw plane image
-      if(__planeImg.complete && __planeImg.naturalWidth>0){
-        cx.save();
-        cx.translate(sx, sy);
-        cx.rotate(-0.04);
-        // gentle bob
-        var bob = Math.sin((t||0)*0.08)*6;
-        cx.translate(0, bob);
-        cx.drawImage(__planeImg, -130, -70, 260, 155);
-        cx.restore();
+    var _prevDrawMap = window.drawMap;
+    
+    // Park locations
+    var PARKS = [
+      {x:1200,y:1000,r:180},{x:2600,y:800,r:160},{x:800,y:2800,r:170},
+      {x:3000,y:3000,r:150},{x:2000,y:2200,r:190},{x:1600,y:3400,r:160},
+    ];
+    
+    // Waterfall locations (near rivers)
+    var WATERFALLS = [
+      {x:520,y:650},{x:1150,y:1550},{x:2050,y:2150},{x:2250,y:2650},
+    ];
+    
+    // Dry tree locations
+    var DRY_TREES = [];
+    for(var di=0;di<80;di++){
+      var dtx=((di*457+di*di*19+111)%MAP+MAP)%MAP;
+      var dty=((di*331+di*di*13+77)%MAP+MAP)%MAP;
+      DRY_TREES.push({x:dtx,y:dty,s:1.1+(di%5)*0.15});
+    }
+    
+    function drawFlower(c,x,y,type){
+      c.save(); c.translate(x,y);
+      // Stem
+      c.strokeStyle='#2a6a1a'; c.lineWidth=1.5;
+      c.beginPath(); c.moveTo(0,0); c.quadraticCurveTo(2,-6,0,-12); c.stroke();
+      // Leaf
+      c.fillStyle='#3a8a2a';
+      c.beginPath(); c.ellipse(3,-5,4,2,0.6,0,Math.PI*2); c.fill();
+      if(type===0){
+        // Red flower
+        var petals=['#ff3050','#ff5070','#ff2040','#ff6080','#ff4060'];
+        for(var p=0;p<5;p++){
+          var a=p/5*Math.PI*2+Date.now()/3000;
+          c.fillStyle=petals[p];
+          c.beginPath(); c.ellipse(Math.cos(a)*4,-12+Math.sin(a)*4,3,2,a,0,Math.PI*2); c.fill();
+        }
+        c.fillStyle='#ffd700'; c.beginPath(); c.arc(0,-12,2,0,Math.PI*2); c.fill();
+      } else if(type===1){
+        // Yellow sunflower
+        for(var p=0;p<8;p++){
+          var a=p/8*Math.PI*2;
+          c.fillStyle='#ffd700';
+          c.beginPath(); c.ellipse(Math.cos(a)*5,-12+Math.sin(a)*5,3.5,1.8,a,0,Math.PI*2); c.fill();
+        }
+        c.fillStyle='#8a5a10'; c.beginPath(); c.arc(0,-12,2.5,0,Math.PI*2); c.fill();
+      } else if(type===2){
+        // Purple flower
+        for(var p=0;p<6;p++){
+          var a=p/6*Math.PI*2;
+          c.fillStyle='#9a40d0';
+          c.beginPath(); c.ellipse(Math.cos(a)*4,-12+Math.sin(a)*4,2.5,1.5,a,0,Math.PI*2); c.fill();
+        }
+        c.fillStyle='#ffa0ff'; c.beginPath(); c.arc(0,-12,1.8,0,Math.PI*2); c.fill();
       } else {
-        // Fallback drawn biplane
-        _drawBiplaneCanvas(cx, sx, sy, t);
+        // Pink flower
+        for(var p=0;p<5;p++){
+          var a=p/5*Math.PI*2+0.3;
+          c.fillStyle='#ff69b4';
+          c.beginPath(); c.ellipse(Math.cos(a)*3.5,-12+Math.sin(a)*3.5,2.8,1.5,a,0,Math.PI*2); c.fill();
+        }
+        c.fillStyle='#fff'; c.beginPath(); c.arc(0,-12,1.5,0,Math.PI*2); c.fill();
       }
-
-      // Tether rope from plane belly
-      if(typeof G!=='undefined'&&!G.playerDropped){
-        cx.strokeStyle='rgba(180,130,60,0.6)'; cx.lineWidth=2; cx.setLineDash([5,4]);
-        cx.beginPath(); cx.moveTo(sx-10, sy+70); cx.lineTo(sx-10, sy+155); cx.stroke();
-        cx.setLineDash([]);
-        cx.fillStyle='rgba(255,215,80,0.9)';
-        cx.font='bold clamp(10px,2.5vw,13px) Courier New';
-        cx.textAlign='center';
-        cx.fillText('▼ YOU', sx-10, sy+178);
-      }
-
-      cx.restore();
-    }
-
-    function _drawBiplaneCanvas(c, sx, sy, t){
-      c.save(); c.translate(sx,sy);
-      // Wings
-      c.fillStyle='#c85a20';
-      c.beginPath(); c.roundRect(-120,-22,220,16,4); c.fill();
-      c.beginPath(); c.roundRect(-100,14,190,14,4); c.fill();
-      // Struts
-      c.strokeStyle='#8a5a20'; c.lineWidth=3;
-      [-70,-30,30,70].forEach(function(ox){
-        c.beginPath(); c.moveTo(ox,-6); c.lineTo(ox-4,14); c.stroke();
-      });
-      // Body
-      c.fillStyle='#e8a840';
-      c.beginPath(); c.roundRect(-110,-10,200,26,8); c.fill();
-      // Cockpit
-      c.fillStyle='rgba(120,180,220,0.6)';
-      c.beginPath(); c.ellipse(20,-8,22,16,0.2,0,Math.PI*2); c.fill();
-      // Propeller hub
-      c.fillStyle='#5a3a10'; c.beginPath(); c.arc(-105,-2,8,0,Math.PI*2); c.fill();
-      var sa=(t*0.4)%(Math.PI*2);
-      c.strokeStyle='#3a2008'; c.lineWidth=4; c.lineCap='round';
-      for(var b=0;b<2;b++){var a=sa+b*Math.PI; c.beginPath(); c.moveTo(-105+Math.cos(a)*4,-2+Math.sin(a)*3); c.lineTo(-105+Math.cos(a)*28,-2+Math.sin(a)*20); c.stroke();}
-      // Tail
-      c.fillStyle='#c85a20'; c.beginPath(); c.moveTo(80,0); c.lineTo(105,-20); c.lineTo(105,12); c.closePath(); c.fill();
-      // Wheels
-      c.fillStyle='#2a2a2a'; c.beginPath(); c.arc(-60,22,9,0,Math.PI*2); c.fill(); c.beginPath(); c.arc(20,22,9,0,Math.PI*2); c.fill();
       c.restore();
     }
-
-    // Patch _drawDroneScreen
-    window._drawDroneScreen = _drawPlaneScreen;
-
-    // Also patch drawDroneOverlay (legacy)
-    window.drawDroneOverlay = function(){};
-
-    // ══ 3. FLYING BIRDS across the map ══
-    var _birds=[];
-    for(var bi=0;bi<35;bi++){
-      _birds.push({
-        x:Math.random()*MAP, y:Math.random()*MAP,
-        vx:1.2+Math.random()*2.5, vy:(Math.random()-.5)*0.4,
-        phase:Math.random()*Math.PI*2,
-        size:3+Math.random()*4,
-        col:['#222232','#333344','#444455','#666','#555'][bi%5]
-      });
+    
+    function drawPark(c,pk){
+      c.save();
+      // Green grass circle
+      var gg=c.createRadialGradient(pk.x,pk.y,0,pk.x,pk.y,pk.r);
+      gg.addColorStop(0,'#4a7a2a'); gg.addColorStop(0.6,'#3a6a1a'); gg.addColorStop(1,'rgba(40,80,20,0)');
+      c.fillStyle=gg; c.beginPath(); c.arc(pk.x,pk.y,pk.r,0,Math.PI*2); c.fill();
+      // Path through park
+      c.strokeStyle='#a08860'; c.lineWidth=8; c.lineCap='round';
+      c.beginPath(); c.moveTo(pk.x-pk.r*0.8,pk.y); c.quadraticCurveTo(pk.x,pk.y-20,pk.x+pk.r*0.8,pk.y); c.stroke();
+      // Flowers scattered
+      for(var fi=0;fi<18;fi++){
+        var fa=fi/18*Math.PI*2+pk.x*0.01;
+        var fr=pk.r*0.3+pk.r*0.5*((fi*31+pk.x)%100)/100;
+        var fx=pk.x+Math.cos(fa)*fr;
+        var fy=pk.y+Math.sin(fa)*fr*0.8;
+        drawFlower(c,fx,fy,fi%4);
+      }
+      // Park bench
+      c.fillStyle='#6a4a20';
+      c.beginPath(); c.roundRect(pk.x-15,pk.y+20,30,6,2); c.fill();
+      c.fillStyle='#5a3a18';
+      c.beginPath(); c.roundRect(pk.x-12,pk.y+26,5,10,1); c.fill();
+      c.beginPath(); c.roundRect(pk.x+7,pk.y+26,5,10,1); c.fill();
+      // Park label
+      c.fillStyle='rgba(0,200,80,0.7)'; c.font='bold 8px Courier New'; c.textAlign='center';
+      c.fillText('🌸 PARK',pk.x,pk.y+pk.r+12);
+      c.restore();
     }
-    function _drawBirds(c){
+    
+    function drawWaterfall(c,wf){
+      c.save(); c.translate(wf.x,wf.y);
       var t=Date.now()/1000;
-      _birds.forEach(function(b){
-        b.x+=b.vx; b.y+=b.vy+Math.sin(t*2+b.phase)*0.25;
-        if(b.x>MAP+100)b.x=-100;
-        if(b.y>MAP+50)b.y=-50; if(b.y<-50)b.y=MAP+50;
-        var wa=Math.sin(t*7+b.phase)*0.85; var s=b.size;
-        c.save(); c.translate(b.x,b.y);
-        c.strokeStyle=b.col; c.lineWidth=1.5; c.lineCap='round';
-        c.beginPath(); c.moveTo(0,0); c.quadraticCurveTo(-s*1.4,-s*wa*1.6,-s*2.8,-s*0.2+wa*s); c.stroke();
-        c.beginPath(); c.moveTo(0,0); c.quadraticCurveTo(s*1.4,-s*wa*1.6,s*2.8,-s*0.2+wa*s); c.stroke();
-        c.fillStyle=b.col; c.beginPath(); c.arc(0,0,s*0.28,0,Math.PI*2); c.fill();
-        c.restore();
+      // Rock face
+      var rg=c.createLinearGradient(-20,-40,20,0);
+      rg.addColorStop(0,'#5a5040'); rg.addColorStop(1,'#3a3028');
+      c.fillStyle=rg;
+      c.beginPath(); c.moveTo(-25,-40); c.lineTo(25,-40); c.lineTo(30,10); c.lineTo(-30,10); c.closePath(); c.fill();
+      // Rock texture
+      c.fillStyle='#4a4030';
+      c.beginPath(); c.roundRect(-20,-35,15,8,2); c.fill();
+      c.beginPath(); c.roundRect(5,-30,12,6,2); c.fill();
+      c.beginPath(); c.roundRect(-15,-20,10,7,2); c.fill();
+      // Animated water falling
+      c.strokeStyle='rgba(100,200,255,0.7)'; c.lineWidth=3;
+      var flowOff=(t*80)%30;
+      c.setLineDash([8,6]); c.lineDashOffset=-flowOff;
+      c.beginPath(); c.moveTo(-8,-38); c.lineTo(-10,8); c.stroke();
+      c.beginPath(); c.moveTo(0,-38); c.lineTo(-2,8); c.stroke();
+      c.beginPath(); c.moveTo(8,-38); c.lineTo(6,8); c.stroke();
+      c.setLineDash([]); c.lineDashOffset=0;
+      // Water shine
+      c.fillStyle='rgba(180,240,255,0.4)';
+      c.beginPath(); c.ellipse(-4,-15,3,12,0.1,0,Math.PI*2); c.fill();
+      c.beginPath(); c.ellipse(4,-10,2,10,-0.1,0,Math.PI*2); c.fill();
+      // Splash pool at bottom
+      c.fillStyle='rgba(80,180,255,0.5)';
+      c.beginPath(); c.ellipse(0,12,22,8,0,0,Math.PI*2); c.fill();
+      // Splash particles
+      c.fillStyle='rgba(200,240,255,0.6)';
+      for(var si=0;si<5;si++){
+        var sa=si/5*Math.PI+t*3;
+        var sr=12+Math.sin(t*4+si)*5;
+        c.beginPath(); c.arc(Math.cos(sa)*sr,10+Math.sin(sa)*3,1.5,0,Math.PI*2); c.fill();
+      }
+      // Mist
+      c.fillStyle='rgba(200,240,255,0.15)';
+      c.beginPath(); c.ellipse(0,0,35,20,0,0,Math.PI*2); c.fill();
+      c.restore();
+    }
+    
+    function drawDryTree(c,x,y,s){
+      c.save(); c.translate(x,y);
+      // Shadow
+      c.fillStyle='rgba(0,0,0,0.15)'; c.beginPath(); c.ellipse(0,6*s,10*s,3*s,0,0,Math.PI*2); c.fill();
+      // Trunk — grey/brown dead wood
+      c.fillStyle='#5a4a3a';
+      c.beginPath(); c.moveTo(-2.5*s,5*s); c.lineTo(-2*s,-12*s); c.lineTo(2*s,-12*s); c.lineTo(2.5*s,5*s); c.closePath(); c.fill();
+      // Bark cracks
+      c.strokeStyle='#3a2a1a'; c.lineWidth=0.5*s;
+      c.beginPath(); c.moveTo(0,4*s); c.lineTo(-0.5*s,-10*s); c.stroke();
+      // Dead branches
+      c.strokeStyle='#5a4a3a'; c.lineWidth=2*s; c.lineCap='round';
+      c.beginPath(); c.moveTo(-1*s,-10*s); c.lineTo(-10*s,-18*s); c.stroke();
+      c.beginPath(); c.moveTo(1*s,-10*s); c.lineTo(9*s,-20*s); c.stroke();
+      c.beginPath(); c.moveTo(-1*s,-8*s); c.lineTo(-7*s,-14*s); c.stroke();
+      c.beginPath(); c.moveTo(0,-12*s); c.lineTo(3*s,-22*s); c.stroke();
+      // Sub branches
+      c.lineWidth=1*s;
+      c.beginPath(); c.moveTo(-10*s,-18*s); c.lineTo(-14*s,-22*s); c.stroke();
+      c.beginPath(); c.moveTo(-10*s,-18*s); c.lineTo(-8*s,-24*s); c.stroke();
+      c.beginPath(); c.moveTo(9*s,-20*s); c.lineTo(13*s,-24*s); c.stroke();
+      c.beginPath(); c.moveTo(9*s,-20*s); c.lineTo(7*s,-26*s); c.stroke();
+      c.beginPath(); c.moveTo(3*s,-22*s); c.lineTo(5*s,-28*s); c.stroke();
+      // Sparse dry leaves (autumn brown/orange)
+      var leafCols=['#8a6020','#a07030','#6a4a10','#c08040','#705020'];
+      for(var li=0;li<8;li++){
+        var la=li*0.8+x*0.01;
+        var lbx=[-10,-7,-3,3,7,9,5,-5][li]*s;
+        var lby=[-18,-14,-22,-20,-24,-18,-24,-26][li]*s;
+        c.fillStyle=leafCols[li%leafCols.length];
+        c.beginPath(); c.ellipse(lbx+Math.sin(Date.now()/2000+la)*2,lby,3*s,1.5*s,la,0,Math.PI*2); c.fill();
+      }
+      // Falling leaves animation
+      var ft=Date.now()/1000;
+      for(var fli=0;fli<3;fli++){
+        var fallProg=((ft*0.3+fli*0.33+x*0.001)%1);
+        var flx=(fli-1)*8*s+Math.sin(ft*2+fli)*6*s;
+        var fly=-20*s+fallProg*30*s;
+        c.fillStyle=leafCols[(fli+2)%leafCols.length];
+        c.globalAlpha=1-fallProg;
+        c.beginPath(); c.ellipse(flx,fly,2.5*s,1.2*s,ft+fli,0,Math.PI*2); c.fill();
+      }
+      c.globalAlpha=1;
+      c.restore();
+    }
+    
+    window.drawMap = function(){
+      _prevDrawMap();
+      // Draw parks
+      PARKS.forEach(function(pk){ drawPark(cx,pk); });
+      // Draw waterfalls
+      WATERFALLS.forEach(function(wf){ drawWaterfall(cx,wf); });
+      // Draw dry/autumn trees (only those not too close to places or rivers)
+      DRY_TREES.forEach(function(dt){
+        var nearPlace=false;
+        for(var i=0;i<PLACES.length;i++){
+          if(Math.hypot(PLACES[i].x-dt.x,PLACES[i].y-dt.y)<250){nearPlace=true;break;}
+        }
+        var onRiver2=Math.abs(dt.y-1800)<80;
+        if(!nearPlace&&!onRiver2) drawDryTree(cx,dt.x,dt.y,dt.s);
       });
-    }
-
-    // ══ 4. PARK helpers ══
-    function _drawFlower(c,x,y,sz,col){
-      c.save(); c.translate(x,y);
-      c.strokeStyle='#2a6a10'; c.lineWidth=1.5;
-      c.beginPath(); c.moveTo(0,0); c.lineTo(0,sz*3); c.stroke();
-      c.fillStyle='#3a8a18'; c.beginPath(); c.ellipse(-sz*0.7,sz*1.5,sz*0.7,sz*0.28,-0.5,0,Math.PI*2); c.fill();
-      for(var p=0;p<5;p++){var a=(p/5)*Math.PI*2; c.fillStyle=col; c.beginPath(); c.ellipse(Math.cos(a)*sz*0.65,Math.sin(a)*sz*0.65-sz*0.15,sz*0.45,sz*0.28,a,0,Math.PI*2); c.fill();}
-      c.fillStyle='#ffd700'; c.beginPath(); c.arc(0,-sz*0.15,sz*0.28,0,Math.PI*2); c.fill();
-      c.restore();
-    }
-    function _drawWaterfall(c,x,y){
-      var t=Date.now()/1000;
-      c.save(); c.translate(x,y);
-      var rg2=c.createLinearGradient(-30,-60,30,-60); rg2.addColorStop(0,'#5a4a3a'); rg2.addColorStop(0.5,'#7a6a5a'); rg2.addColorStop(1,'#4a3a2a');
-      c.fillStyle=rg2; c.beginPath(); c.roundRect(-32,-62,64,28,4); c.fill();
-      c.fillStyle='#6a5a4a'; c.beginPath(); c.roundRect(-26,-55,52,18,3); c.fill();
-      var off=(t*80)%20;
-      c.strokeStyle='rgba(100,200,255,0.55)'; c.lineWidth=4; c.setLineDash([8,6]); c.lineDashOffset=-off;
-      c.beginPath(); c.moveTo(-8,-38); c.lineTo(-10,28); c.stroke();
-      c.beginPath(); c.moveTo(0,-38); c.lineTo(-2,28); c.stroke();
-      c.beginPath(); c.moveTo(8,-38); c.lineTo(6,28); c.stroke();
-      c.setLineDash([]);
-      c.fillStyle='rgba(60,160,220,0.4)'; c.beginPath(); c.moveTo(-14,-38); c.lineTo(-18,28); c.lineTo(18,28); c.lineTo(14,-38); c.closePath(); c.fill();
-      var pg2=c.createRadialGradient(0,36,4,0,36,32); pg2.addColorStop(0,'rgba(40,140,200,0.55)'); pg2.addColorStop(1,'rgba(20,80,120,0)');
-      c.fillStyle=pg2; c.beginPath(); c.ellipse(0,38,32,11,0,0,Math.PI*2); c.fill();
-      c.strokeStyle='rgba(160,220,255,0.3)'; c.lineWidth=1;
-      for(var ri=0;ri<3;ri++){var rr=9+ri*8+Math.sin(t*3+ri)*2; c.beginPath(); c.ellipse(0,38,rr,rr*0.28,0,0,Math.PI*2); c.stroke();}
-      c.fillStyle='rgba(200,230,255,0.22)'; c.beginPath(); c.ellipse(0,30,24,12,0,0,Math.PI*2); c.fill();
-      c.restore();
-    }
-    function _drawDryLeaf(c,x,y){
-      var t=Date.now()/1000;
-      var cols=['#c8a040','#b08830','#d4b050','#a07828','#8a6020','#c09838'];
-      for(var i=0;i<10;i++){
-        var seed=i*73.7+x*0.01+y*0.01;
-        var lx=x+Math.sin(seed+t*0.4)*35+(i%4)*18-28;
-        var ly=y+Math.cos(seed*1.3+t*0.25)*22+(i%3)*14-18;
-        var rot=t*1.2+seed; var sz=2+i%3;
-        c.save(); c.translate(lx,ly); c.rotate(rot);
-        c.fillStyle=cols[i%cols.length]; c.globalAlpha=0.65;
-        c.beginPath(); c.moveTo(0,-sz); c.quadraticCurveTo(sz*1.4,0,0,sz); c.quadraticCurveTo(-sz*1.4,0,0,-sz); c.fill();
-        c.strokeStyle='rgba(80,50,10,0.35)'; c.lineWidth=0.5; c.beginPath(); c.moveTo(0,-sz); c.lineTo(0,sz); c.stroke();
-        c.globalAlpha=1; c.restore();
-      }
-    }
-    function _drawDryTree(c,x,y,s){
-      c.save(); c.translate(x,y);
-      c.fillStyle='#5a3a1a'; c.beginPath(); c.moveTo(-3*s,5*s); c.lineTo(-2*s,-10*s); c.lineTo(2*s,-10*s); c.lineTo(3*s,5*s); c.closePath(); c.fill();
-      c.strokeStyle='#4a2a0a'; c.lineWidth=2*s; c.lineCap='round';
-      [[0,-10,-9,-18],[0,-10,7,-20],[-9,-18,-13,-24],[-9,-18,-5,-26],[7,-20,11,-26],[7,-20,3,-28],[-2,-9,-6,-14],[2,-9,5,-14]].forEach(function(b){
-        c.beginPath(); c.moveTo(b[0]*s,b[1]*s); c.lineTo(b[2]*s,b[3]*s); c.stroke();
-      });
-      var dlc=['#c8a040','#a08030','#d4b050','#8a6020'];
-      for(var li=0;li<6;li++){var lx2=(li%2===0?-1:1)*(4+li*2)*s; var ly2=(-16-li*2)*s; c.fillStyle=dlc[li%dlc.length]; c.beginPath(); c.ellipse(lx2,ly2,2.2*s,1*s,(li*0.6),0,Math.PI*2); c.fill();}
-      c.restore();
-    }
-    function _drawPark(c,x,y){
-      var pg3=c.createRadialGradient(x,y,0,x,y,110); pg3.addColorStop(0,'#5a7a2a'); pg3.addColorStop(0.5,'#4a6a20'); pg3.addColorStop(1,'rgba(60,90,30,0)');
-      c.fillStyle=pg3; c.beginPath(); c.ellipse(x,y,110,95,0,0,Math.PI*2); c.fill();
-      c.strokeStyle='rgba(160,140,100,0.45)'; c.lineWidth=7; c.lineCap='round';
-      c.beginPath(); c.moveTo(x-75,y+25); c.quadraticCurveTo(x,y-18,x+75,y+25); c.stroke();
-      var fcols=['#ff4466','#ff69b4','#ffaa00','#ff6600','#ff44aa','#cc44ff'];
-      for(var fi=0;fi<10;fi++){var fa=(fi/10)*Math.PI*2; var fr=38+((fi*17)%38); _drawFlower(c,x+Math.cos(fa)*fr,y+Math.sin(fa)*fr*0.7,3+fi%3,fcols[fi%fcols.length]);}
-      _drawWaterfall(c,x+12,y-28);
-      _drawDryTree(c,x-85,y+18,1.1);
-      _drawDryTree(c,x+80,y+14,0.95);
-      _drawDryLeaf(c,x-48,y+46);
-      _drawDryLeaf(c,x+38,y+38);
-      c.fillStyle='#6a4a20'; c.beginPath(); c.roundRect(x-14,y+52,28,5,2); c.fill();
-      c.fillStyle='#5a3a18'; c.beginPath(); c.roundRect(x-11,y+57,3,7,1); c.fill(); c.beginPath(); c.roundRect(x+8,y+57,3,7,1); c.fill();
-      c.fillStyle='rgba(90,200,60,0.65)'; c.font='bold 8px Courier New'; c.textAlign='center';
-      c.fillText('\u{1F33F} PARK',x,y+76);
-    }
-    var PARKS=[{x:1200,y:600},{x:2600,y:1000},{x:800,y:2800},{x:3000,y:3200},{x:1800,y:1200},{x:3400,y:600},{x:400,y:3000}];
-
-    // ══ 5. Patch drawMap ══
-    var _origDM=window.drawMap;
-    window.drawMap=function(){
-      _origDM();
-      PARKS.forEach(function(p){_drawPark(cx,p.x,p.y);});
-      for(var dti=0;dti<18;dti++){var dtx=((dti*631+dti*dti*19)%MAP+MAP)%MAP; var dty=((dti*457+dti*dti*13)%MAP+MAP)%MAP; _drawDryTree(cx,dtx,dty,1.0+dti%3*0.2);}
-      for(var dli=0;dli<25;dli++){var dlx=((dli*547+dli*dli*11)%MAP+MAP)%MAP; var dly=((dli*383+dli*dli*7)%MAP+MAP)%MAP; _drawDryLeaf(cx,dlx,dly);}
-      _drawBirds(cx);
     };
-
-    // ══ 6. NEW SKINS — Farmer (male) & Farmer's Wife (female) ══
-    function waitSkins(cb){
-      if(typeof SKINS!=='undefined'&&SKINS.length>0){cb();}
-      else{setTimeout(function(){waitSkins(cb);},120);}
-    }
-    waitSkins(function(){
-
-      // ── Farmer (male) draw function ──
-      function _drawFarmerMale(c, dir, bob){
-        c.save(); c.translate(0, bob||0);
-        // Boots
-        c.fillStyle='#4a2e18';
-        c.beginPath(); c.roundRect(-12,28,10,10,2); c.fill();
-        c.beginPath(); c.roundRect(2,28,10,10,2); c.fill();
-        // Overalls - denim blue
-        c.fillStyle='#4a6a9a';
-        c.beginPath(); c.roundRect(-13,2,26,28,4); c.fill();
-        // Overalls bib pocket
-        c.fillStyle='#3a5a8a';
-        c.beginPath(); c.roundRect(-7,4,14,12,2); c.fill();
-        // Overalls straps
-        c.fillStyle='#3a5a8a';
-        c.beginPath(); c.roundRect(-10,-10,4,14,2); c.fill();
-        c.beginPath(); c.roundRect(6,-10,4,14,2); c.fill();
-        // Blue plaid shirt sleeves
-        c.fillStyle='#3a60b0';
-        c.beginPath(); c.roundRect(-20,-8,8,18,3); c.fill();
-        c.beginPath(); c.roundRect(12,-8,8,18,3); c.fill();
-        // Plaid lines on sleeves
-        c.strokeStyle='rgba(100,160,255,0.4)'; c.lineWidth=1;
-        c.beginPath(); c.moveTo(-18,-6); c.lineTo(-14,8); c.stroke();
-        c.beginPath(); c.moveTo(14,-6); c.lineTo(18,8); c.stroke();
-        // Dirt patches on overalls
-        c.fillStyle='rgba(80,50,20,0.35)';
-        c.beginPath(); c.ellipse(-6,22,4,3,0.4,0,Math.PI*2); c.fill();
-        c.beginPath(); c.ellipse(5,18,3,2,-.3,0,Math.PI*2); c.fill();
-        // Pitchfork (left hand)
-        c.strokeStyle='#7a4a18'; c.lineWidth=2.5; c.lineCap='round';
-        c.beginPath(); c.moveTo(-20,8); c.lineTo(-20,-32); c.stroke();
-        c.lineWidth=1.5;
-        [-23,-20,-17].forEach(function(fx){ c.beginPath(); c.moveTo(fx,-32); c.lineTo(fx,-22); c.stroke(); });
-        // Egg basket (right hand)
-        c.fillStyle='#8a6030';
-        c.beginPath(); c.roundRect(13,4,14,11,4); c.fill();
-        c.strokeStyle='#6a4820'; c.lineWidth=1.2;
-        c.beginPath(); c.arc(20,4,7,Math.PI,0); c.stroke();
-        // Eggs in basket
-        ['#ffccdd','#aaddff','#ccffaa'].forEach(function(ec,ei){
-          c.fillStyle=ec; c.beginPath(); c.ellipse(15+ei*4,8,2.5,3,0,0,Math.PI*2); c.fill();
-        });
-        // Neck
-        c.fillStyle='#c8906a';
-        c.beginPath(); c.ellipse(0,-12,6,7,0,0,Math.PI*2); c.fill();
-        // Head
-        c.fillStyle='#c8906a';
-        c.beginPath(); c.ellipse(0,-24,12,13,0,0,Math.PI*2); c.fill();
-        // Dark hair / stubble
-        c.fillStyle='#3a2010';
-        c.beginPath(); c.arc(0,-24,11,Math.PI,0); c.lineTo(0,-24); c.fill();
-        // Hat - brown wide brim
-        c.fillStyle='#6a4010';
-        c.beginPath(); c.ellipse(0,-35,16,4,0,0,Math.PI*2); c.fill();
-        c.fillStyle='#7a5020';
-        c.beginPath(); c.roundRect(-10,-38,20,7,3); c.fill();
-        // Hat patch (X)
-        c.strokeStyle='#5a3a10'; c.lineWidth=1.2;
-        c.beginPath(); c.moveTo(6,-36); c.lineTo(9,-33); c.stroke();
-        c.beginPath(); c.moveTo(9,-36); c.lineTo(6,-33); c.stroke();
-        // Eyes (serious)
-        c.fillStyle='#2a1a0a';
-        c.beginPath(); c.ellipse(-4,-25,2,1.8,0,0,Math.PI*2); c.fill();
-        c.beginPath(); c.ellipse(4,-25,2,1.8,0,0,Math.PI*2); c.fill();
-        // Eyebrows (furrowed)
-        c.strokeStyle='#3a2010'; c.lineWidth=1.5;
-        c.beginPath(); c.moveTo(-7,-28); c.lineTo(-2,-27); c.stroke();
-        c.beginPath(); c.moveTo(7,-28); c.lineTo(2,-27); c.stroke();
-        // Mouth (neutral)
-        c.strokeStyle='#8a5040'; c.lineWidth=1.2; c.lineCap='round';
-        c.beginPath(); c.moveTo(-3,-20); c.lineTo(3,-20); c.stroke();
-        c.restore();
-      }
-
-      // ── Farmer's Wife (female) draw function ──
-      function _drawFarmerFemale(c, dir, bob){
-        c.save(); c.translate(0, bob||0);
-        // Boots
-        c.fillStyle='#4a2e18';
-        c.beginPath(); c.roundRect(-11,28,9,10,2); c.fill();
-        c.beginPath(); c.roundRect(2,28,9,10,2); c.fill();
-        // Overalls - denim
-        c.fillStyle='#5a78aa';
-        c.beginPath(); c.roundRect(-12,2,24,28,4); c.fill();
-        c.fillStyle='#4a68a0';
-        c.beginPath(); c.roundRect(-6,4,12,11,2); c.fill();
-        // Overalls straps
-        c.fillStyle='#4a68a0';
-        c.beginPath(); c.roundRect(-9,-10,4,14,2); c.fill();
-        c.beginPath(); c.roundRect(5,-10,4,14,2); c.fill();
-        // Red plaid shirt
-        c.fillStyle='#cc3030';
-        c.beginPath(); c.roundRect(-18,-8,7,17,3); c.fill();
-        c.beginPath(); c.roundRect(11,-8,7,17,3); c.fill();
-        // Plaid lines
-        c.strokeStyle='rgba(255,180,180,0.45)'; c.lineWidth=1;
-        c.beginPath(); c.moveTo(-16,-6); c.lineTo(-13,7); c.stroke();
-        c.beginPath(); c.moveTo(13,-6); c.lineTo(16,7); c.stroke();
-        // Dirt patches
-        c.fillStyle='rgba(80,50,20,0.3)';
-        c.beginPath(); c.ellipse(-5,20,3,2,0.4,0,Math.PI*2); c.fill();
-        c.beginPath(); c.ellipse(4,24,2.5,2,-.3,0,Math.PI*2); c.fill();
-        // Veggie basket (right hand)
-        c.fillStyle='#8a7030';
-        c.beginPath(); c.roundRect(11,4,15,12,4); c.fill();
-        c.strokeStyle='#6a5020'; c.lineWidth=1.2;
-        c.beginPath(); c.arc(18.5,4,7.5,Math.PI,0); c.stroke();
-        // Veggies
-        c.fillStyle='#22aa22'; c.beginPath(); c.ellipse(14,4,3,5,0.2,0,Math.PI*2); c.fill();
-        c.fillStyle='#ee4422'; c.beginPath(); c.ellipse(19,3,3,4,-.1,0,Math.PI*2); c.fill();
-        c.fillStyle='#ffaa00'; c.beginPath(); c.ellipse(24,5,2.5,3.5,0.1,0,Math.PI*2); c.fill();
-        // Neck
-        c.fillStyle='#d4a07a';
-        c.beginPath(); c.ellipse(0,-12,5,6,0,0,Math.PI*2); c.fill();
-        // Head
-        c.fillStyle='#d4a07a';
-        c.beginPath(); c.ellipse(0,-24,11,13,0,0,Math.PI*2); c.fill();
-        // Blush cheeks
-        c.fillStyle='rgba(220,100,80,0.3)';
-        c.beginPath(); c.ellipse(-7,-22,4,2.5,0,0,Math.PI*2); c.fill();
-        c.beginPath(); c.ellipse(7,-22,4,2.5,0,0,Math.PI*2); c.fill();
-        // Dark hair (bun/low)
-        c.fillStyle='#2a1a10';
-        c.beginPath(); c.arc(0,-24,10,Math.PI,0); c.lineTo(0,-24); c.fill();
-        c.beginPath(); c.ellipse(10,-26,5,4,0.3,0,Math.PI*2); c.fill();
-        // Straw hat - wide brim
-        c.fillStyle='#c8a040';
-        c.beginPath(); c.ellipse(0,-35,18,4.5,0,0,Math.PI*2); c.fill();
-        c.fillStyle='#d8b050';
-        c.beginPath(); c.roundRect(-9,-40,18,7,3); c.fill();
-        // Hat band (white/green ribbon)
-        c.strokeStyle='rgba(255,255,255,0.7)'; c.lineWidth=2;
-        c.beginPath(); c.moveTo(-8,-37); c.lineTo(8,-37); c.stroke();
-        c.fillStyle='#44aa44';
-        c.beginPath(); c.ellipse(7,-37,3,2,0,0,Math.PI*2); c.fill();
-        // Eyes (happy)
-        c.fillStyle='#3a1a08';
-        c.beginPath(); c.ellipse(-4,-25,2,2,0,0,Math.PI*2); c.fill();
-        c.beginPath(); c.ellipse(4,-25,2,2,0,0,Math.PI*2); c.fill();
-        // Eye shine
-        c.fillStyle='rgba(255,255,255,0.7)';
-        c.beginPath(); c.arc(-3,-26,0.8,0,Math.PI*2); c.fill();
-        c.beginPath(); c.arc(5,-26,0.8,0,Math.PI*2); c.fill();
-        // Smile
-        c.strokeStyle='#8a4030'; c.lineWidth=1.5; c.lineCap='round';
-        c.beginPath(); c.moveTo(-4,-19); c.quadraticCurveTo(0,-16,4,-19); c.stroke();
-        c.restore();
-      }
-
-      // Add two new skins with custom drawChar overrides
-      var farmerMaleIdx  = SKINS.length;
-      var farmerFemaleIdx = SKINS.length + 1;
-
-      SKINS.push({ name:'FARMER',       h:'#c8906a', c:'#4a6a9a', price:800  });
-      SKINS.push({ name:"FARMER'S WIFE", h:'#d4a07a', c:'#5a78aa', price:800  });
-
-      // Patch drawCharSVG to handle new skins
-      var _origDrawCharSVG = window.drawCharSVG;
-      window.drawCharSVG = function(canvas, skinIdx){
-        if(skinIdx !== farmerMaleIdx && skinIdx !== farmerFemaleIdx){
-          _origDrawCharSVG(canvas, skinIdx); return;
-        }
-        var ctx2 = canvas.getContext('2d');
-        var w = canvas.width, h2 = canvas.height;
-        ctx2.clearRect(0,0,w,h2);
-        var sc = w/52;
-        ctx2.save();
-        ctx2.translate(w/2, h2*0.62);
-        ctx2.scale(sc,sc);
-        // shadow
-        ctx2.save(); ctx2.scale(1,0.25);
-        ctx2.beginPath(); ctx2.ellipse(0,52,14,6,0,0,Math.PI*2);
-        ctx2.fillStyle='rgba(0,0,0,0.35)'; ctx2.fill(); ctx2.restore();
-        if(skinIdx === farmerMaleIdx) _drawFarmerMale(ctx2,'front',0);
-        else _drawFarmerFemale(ctx2,'front',0);
-        ctx2.restore();
-      };
-
-      // Patch _drawCharDir to render new skins in-game
-      var _origDrawCharDir = window._drawCharDir;
-      window._drawCharDir = function(c, dir, sk, angle, bob){
-        var idx = SKINS.indexOf(sk);
-        if(idx === farmerMaleIdx){ _drawFarmerMale(c, dir, bob||0); return; }
-        if(idx === farmerFemaleIdx){ _drawFarmerFemale(c, dir, bob||0); return; }
-        _origDrawCharDir(c, dir, sk, angle, bob);
-      };
-
-      // Redraw lobby char if one of the new skins is selected
-      setTimeout(function(){
-        if(typeof G!=='undefined' && (G.skin===farmerMaleIdx||G.skin===farmerFemaleIdx)){
-          var lc=document.getElementById('lobbyChar');
-          if(lc) window.drawCharSVG(lc, G.skin);
-        }
-      }, 300);
-
-      console.log('[PATCH v5] Farmer skins added at indices', farmerMaleIdx, farmerFemaleIdx);
-    });
-
-    // ══ 7. EVENT / MISSION SYSTEM ══
-    // Worker pieces: collect 12 to unlock the Worker character
-    // Missions: kill10=2p, play10min=2p, play30min=4p, kill20=4p
-
-    // Load/save event progress
-    var _ep = (function(){
-      try{ return JSON.parse(localStorage.getItem('hexaEvent')||'{}'); }catch(e){ return {}; }
-    })();
-    if(!_ep.pieces)       _ep.pieces=0;
-    if(!_ep.kill10done)   _ep.kill10done=false;
-    if(!_ep.kill20done)   _ep.kill20done=false;
-    if(!_ep.play10done)   _ep.play10done=false;
-    if(!_ep.play30done)   _ep.play30done=false;
-    if(!_ep.workerUnlocked) _ep.workerUnlocked=false;
-    if(!_ep.workerSkinIdx)  _ep.workerSkinIdx=-1;
-    function _saveEP(){ try{ localStorage.setItem('hexaEvent', JSON.stringify(_ep)); }catch(e){} }
-
-    // Track game session kills & time
-    var _evKillsThisGame = 0;
-    var _evGameStart = 0;
-
-    // Give pieces helper (max 12)
-    function _givePieces(n, reason){
-      if(_ep.pieces>=12) return;
-      var prev=_ep.pieces;
-      _ep.pieces=Math.min(12,_ep.pieces+n);
-      _saveEP();
-      _showPieceToast('+'+(_ep.pieces-prev)+' Worker Piece'+((_ep.pieces-prev)>1?'s':'')+' — '+reason+' ('+_ep.pieces+'/12)');
-      if(_ep.pieces>=12 && !_ep.workerUnlocked){ _unlockWorker(); }
-    }
-
-    function _showPieceToast(msg){
-      var el=document.createElement('div');
-      el.style.cssText='position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:9999;background:rgba(0,0,0,0.88);border:2px solid #ffd700;border-radius:10px;padding:10px 22px;color:#ffd700;font-family:Courier New,monospace;font-size:13px;font-weight:bold;letter-spacing:2px;pointer-events:none;text-align:center;white-space:nowrap;';
-      el.innerHTML='&#x1F9E9; '+msg;
-      document.body.appendChild(el);
-      setTimeout(function(){ el.style.transition='opacity 0.6s'; el.style.opacity='0'; setTimeout(function(){el.remove();},700); }, 3200);
-    }
-
-    // Unlock Worker character skin
-    function _unlockWorker(){
-      _ep.workerUnlocked=true;
-      // Add worker skin if not already added
-      function doUnlock(){
-        if(typeof SKINS==='undefined'){ setTimeout(doUnlock,200); return; }
-        if(_ep.workerSkinIdx>=0 && _ep.workerSkinIdx<SKINS.length){ _showUnlockModal(); return; }
-        _ep.workerSkinIdx=SKINS.length;
-        SKINS.push({name:'WORKER',h:'#d4a060',c:'#e8820a',price:0});
-        // Draw function
-        function _drawWorker(c,dir,bob){
-          c.save(); c.translate(0,bob||0);
-          // Hard hat
-          c.fillStyle='#e8a010'; c.beginPath(); c.ellipse(0,-37,14,6,0,0,Math.PI*2); c.fill();
-          c.fillStyle='#f0b020'; c.beginPath(); c.roundRect(-10,-42,20,8,3); c.fill();
-          c.fillStyle='#c88800'; c.beginPath(); c.roundRect(-13,-37,26,4,1); c.fill();
-          // Head
-          c.fillStyle='#d4a060'; c.beginPath(); c.ellipse(0,-24,12,13,0,0,Math.PI*2); c.fill();
-          // Eyes
-          c.fillStyle='#2a1a0a'; c.beginPath(); c.ellipse(-4,-25,2,1.8,0,0,Math.PI*2); c.fill();
-          c.beginPath(); c.ellipse(4,-25,2,1.8,0,0,Math.PI*2); c.fill();
-          c.fillStyle='rgba(255,255,255,0.65)'; c.beginPath(); c.arc(-3,-26,0.8,0,Math.PI*2); c.fill(); c.beginPath(); c.arc(5,-26,0.8,0,Math.PI*2); c.fill();
-          // Safety glasses strap
-          c.strokeStyle='rgba(100,200,255,0.5)'; c.lineWidth=2;
-          c.beginPath(); c.moveTo(-12,-25); c.lineTo(12,-25); c.stroke();
-          // Smile
-          c.strokeStyle='#8a5040'; c.lineWidth=1.2; c.lineCap='round';
-          c.beginPath(); c.moveTo(-4,-19); c.quadraticCurveTo(0,-16,4,-19); c.stroke();
-          // Neck
-          c.fillStyle='#d4a060'; c.beginPath(); c.ellipse(0,-12,6,7,0,0,Math.PI*2); c.fill();
-          // Orange vest
-          c.fillStyle='#e8820a'; c.beginPath(); c.roundRect(-13,2,26,26,4); c.fill();
-          // Vest reflective strips
-          c.fillStyle='rgba(255,255,200,0.55)';
-          c.beginPath(); c.roundRect(-13,10,26,4,2); c.fill();
-          c.beginPath(); c.roundRect(-13,20,26,4,2); c.fill();
-          // Vest pocket
-          c.fillStyle='#c86a00'; c.beginPath(); c.roundRect(-8,4,10,8,2); c.fill();
-          // Dark work pants
-          c.fillStyle='#2a2a3a'; c.beginPath(); c.roundRect(-11,26,10,18,3); c.fill();
-          c.beginPath(); c.roundRect(1,26,10,18,3); c.fill();
-          // Work boots
-          c.fillStyle='#3a2810'; c.beginPath(); c.roundRect(-13,40,11,8,2); c.fill();
-          c.beginPath(); c.roundRect(2,40,11,8,2); c.fill();
-          // Arms - blue sleeves
-          c.fillStyle='#2a4a80'; c.beginPath(); c.roundRect(-21,-8,9,18,3); c.fill(); c.beginPath(); c.roundRect(12,-8,9,18,3); c.fill();
-          // Left hand: wrench
-          c.strokeStyle='#8a8a8a'; c.lineWidth=2.5; c.lineCap='round';
-          c.beginPath(); c.moveTo(-22,10); c.lineTo(-22,-2); c.stroke();
-          c.beginPath(); c.moveTo(-25,10); c.lineTo(-22,10); c.stroke();
-          c.beginPath(); c.moveTo(-19,10); c.lineTo(-22,10); c.stroke();
-          c.beginPath(); c.moveTo(-25,-2); c.lineTo(-19,-2); c.stroke();
-          // Right hand: clipboard
-          c.fillStyle='#c8a060'; c.beginPath(); c.roundRect(13,2,12,14,2); c.fill();
-          c.fillStyle='#f5f5e8'; c.beginPath(); c.roundRect(14,4,10,10,1); c.fill();
-          c.strokeStyle='#888'; c.lineWidth=0.8;
-          [6,8,10].forEach(function(ly){ c.beginPath(); c.moveTo(15,ly); c.lineTo(23,ly); c.stroke(); });
-          c.restore();
-        }
-        // Register draw overrides
-        var _oCSVG=window.drawCharSVG;
-        window.drawCharSVG=function(canvas,si){
-          if(si!==_ep.workerSkinIdx){_oCSVG(canvas,si);return;}
-          var ctx2=canvas.getContext('2d');ctx2.clearRect(0,0,canvas.width,canvas.height);
-          var sc=canvas.width/52;ctx2.save();ctx2.translate(canvas.width/2,canvas.height*0.62);ctx2.scale(sc,sc);
-          ctx2.save();ctx2.scale(1,0.25);ctx2.beginPath();ctx2.ellipse(0,52,14,6,0,0,Math.PI*2);ctx2.fillStyle='rgba(0,0,0,0.35)';ctx2.fill();ctx2.restore();
-          _drawWorker(ctx2,'front',0);ctx2.restore();
-        };
-        var _oCD=window._drawCharDir;
-        window._drawCharDir=function(c,dir,sk,angle,bob){
-          if(SKINS.indexOf(sk)===_ep.workerSkinIdx){_drawWorker(c,dir,bob||0);return;}
-          _oCD(c,dir,sk,angle,bob);
-        };
-        // Auto-equip & add to owned
-        if(typeof G!=='undefined'){
-          if(!G.owned) G.owned=[];
-          if(G.owned.indexOf(_ep.workerSkinIdx)<0) G.owned.push(_ep.workerSkinIdx);
-        }
-        _saveEP();
-        _showUnlockModal();
-      }
-      doUnlock();
-    }
-
-    function _showUnlockModal(){
-      var m=document.createElement('div');
-      m.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.82);display:flex;align-items:center;justify-content:center;';
-      m.innerHTML='<div style="background:#0a1a0a;border:2px solid #ffd700;border-radius:16px;padding:32px 40px;text-align:center;max-width:340px;font-family:Courier New,monospace;color:#ffd700;">'
-        +'<div style="font-size:36px;margin-bottom:10px;">&#x1F477;</div>'
-        +'<div style="font-size:22px;font-weight:900;letter-spacing:3px;text-shadow:0 0 20px #ffd700;">WORKER UNLOCKED!</div>'
-        +'<div style="font-size:12px;color:#88cc88;margin:12px 0;letter-spacing:1px;">All 12 Worker Pieces collected!<br>The WORKER skin is now in the Store.</div>'
-        +'<button onclick="this.closest('div[style]').remove()" style="margin-top:12px;padding:10px 28px;background:rgba(255,215,0,0.18);border:1.5px solid #ffd700;color:#ffd700;font-family:Courier New,monospace;font-size:13px;border-radius:8px;cursor:pointer;letter-spacing:2px;">AWESOME!</button>'
-        +'</div>';
-      document.body.appendChild(m);
-    }
-
-    // ── Patch endMatch to track kill/time missions ──
-    var _origEM2=window.endMatch;
-    window.endMatch=function(won){
-      _origEM2(won);
-      // kills missions
-      if(!_ep.kill10done && _evKillsThisGame>=10){ _ep.kill10done=true; _givePieces(2,'Kill 10 Enemies'); }
-      if(!_ep.kill20done && _evKillsThisGame>=20){ _ep.kill20done=true; _givePieces(4,'Kill 20 Enemies'); }
-      // time missions
-      var mins=(Date.now()-_evGameStart)/60000;
-      if(!_ep.play10done && mins>=10){ _ep.play10done=true; _givePieces(2,'Play 10 Minutes'); }
-      if(!_ep.play30done && mins>=30){ _ep.play30done=true; _givePieces(4,'Play 30 Minutes'); }
-      _evKillsThisGame=0;
-    };
-
-    // ── Patch startMatch to reset session counters ──
-    var _origSM2=window.startMatch;
-    window.startMatch=function(){
-      _origSM2();
-      _evKillsThisGame=0;
-      _evGameStart=Date.now();
-    };
-
-    // ── Track kills in this session ──
-    var _origAK=window.addKill;
-    window.addKill=function(msg){
-      _origAK(msg);
-      _evKillsThisGame++;
-      // Check kill missions mid-game too
-      if(!_ep.kill10done && _evKillsThisGame>=10){ _ep.kill10done=true; _givePieces(2,'Kill 10 Enemies'); }
-      if(!_ep.kill20done && _evKillsThisGame>=20){ _ep.kill20done=true; _givePieces(4,'Kill 20 Enemies'); }
-    };
-
-    // ── EVENT TAB in Store ──
-    function _injectEventTab(){
-      var storeEl=document.getElementById('store');
-      if(!storeEl){ setTimeout(_injectEventTab,400); return; }
-      // Add tab button to store header
-      var closeBtn=document.getElementById('closeStore');
-      if(closeBtn && !document.getElementById('eventTabBtn')){
-        var tabBtn=document.createElement('div');
-        tabBtn.id='eventTabBtn';
-        tabBtn.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:7px 16px;background:rgba(255,215,0,0.18);border:1.5px solid #ffd700;border-radius:8px;color:#ffd700;font-family:Courier New,monospace;font-size:11px;font-weight:bold;letter-spacing:2px;cursor:pointer;margin-right:8px;';
-        tabBtn.innerHTML='&#x1F3AF; EVENTS';
-        tabBtn.onclick=function(){ _showEventPanel(); };
-        closeBtn.parentNode.insertBefore(tabBtn,closeBtn);
-      }
-    }
-
-    function _showEventPanel(){
-      var existing=document.getElementById('eventPanel');
-      if(existing){existing.remove();return;}
-      var panel=document.createElement('div');
-      panel.id='eventPanel';
-      panel.style.cssText='position:fixed;inset:0;z-index:8888;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;';
-      function _render(){
-        var missions=[
-          {id:'kill10', label:'Kill 10 Enemies', pieces:2, done:_ep.kill10done, icon:'&#x1F52B;'},
-          {id:'play10', label:'Play 10 Minutes',  pieces:2, done:_ep.play10done, icon:'&#x23F0;'},
-          {id:'kill20', label:'Kill 20 Enemies', pieces:4, done:_ep.kill20done, icon:'&#x1F3AF;'},
-          {id:'play30', label:'Play 30 Minutes',  pieces:4, done:_ep.play30done, icon:'&#x23F3;'},
-        ];
-        var piecesHTML='';
-        for(var pi=0;pi<12;pi++){
-          piecesHTML+='<div style="width:28px;height:28px;border-radius:6px;background:'+(pi<_ep.pieces?'#ffd700':'rgba(255,215,0,0.12)');
-          piecesHTML+=';border:1.5px solid '+(pi<_ep.pieces?'#ffd700':'rgba(255,215,0,0.3)');
-          piecesHTML+=';display:flex;align-items:center;justify-content:center;font-size:12px;">'+(pi<_ep.pieces?'&#x1F9E9;':'')+'</div>';
-        }
-        var missHTML=missions.map(function(m){
-          return '<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:rgba(255,215,0,0.05);border:1px solid rgba(255,215,0,'+(m.done?'0.5':'0.15')+');border-radius:8px;margin-bottom:8px;">'
-            +'<span style="font-size:18px;">'+m.icon+'</span>'
-            +'<div style="flex:1;">'
-            +'<div style="font-family:Courier New,monospace;font-size:11px;color:'+(m.done?'#88ff88':'#cccccc')+';letter-spacing:1px;">'+m.label+'</div>'
-            +'<div style="font-family:Courier New,monospace;font-size:10px;color:#ffd700;">+'+m.pieces+' piece'+(m.pieces>1?'s':'')+'</div>'
-            +'</div>'
-            +'<div style="font-size:16px;">'+(m.done?'&#x2705;':'&#x23F3;')+'</div>'
-            +'</div>';
-        }).join('');
-        panel.innerHTML='<div style="background:#0a120a;border:2px solid #ffd700;border-radius:16px;padding:28px 24px;width:90%;max-width:360px;font-family:Courier New,monospace;">'
-          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">'
-          +'<div style="color:#ffd700;font-size:16px;font-weight:900;letter-spacing:3px;">&#x1F477; WORKER EVENT</div>'
-          +'<button id="evClose" style="background:none;border:1px solid #ff4444;border-radius:6px;color:#ff4444;font-family:Courier New;font-size:11px;padding:4px 10px;cursor:pointer;">CLOSE</button>'
-          +'</div>'
-          +'<div style="color:#aaa;font-size:10px;letter-spacing:2px;margin-bottom:14px;">COLLECT 12 PIECES TO UNLOCK THE WORKER SKIN</div>'
-          +'<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:5px;margin-bottom:16px;">'+piecesHTML+'</div>'
-          +'<div style="background:rgba(0,0,0,0.4);border-radius:8px;height:10px;margin-bottom:18px;overflow:hidden;border:1px solid rgba(255,215,0,0.3);">'
-          +'<div style="height:100%;width:'+Math.round(_ep.pieces/12*100)+'%;background:linear-gradient(90deg,#ffd700,#ff8800);border-radius:8px;transition:width 0.4s;"></div>'
-          +'</div>'
-          +'<div style="color:#ffd700;font-size:10px;letter-spacing:2px;margin-bottom:10px;">MISSIONS</div>'
-          +missHTML
-          +(_ep.workerUnlocked?'<div style="text-align:center;margin-top:12px;padding:8px;background:rgba(255,215,0,0.1);border-radius:8px;color:#ffd700;font-size:11px;letter-spacing:2px;">&#x2705; WORKER SKIN UNLOCKED! Check Store.</div>':'')
-          +'</div>';
-        document.getElementById('evClose').onclick=function(){ panel.remove(); };
-      }
-      _render();
-      document.body.appendChild(panel);
-    }
-
-    // Also check time missions every minute while in-game
-    setInterval(function(){
-      if(typeof G==='undefined'||G.phase!=='game') return;
-      var mins=(Date.now()-_evGameStart)/60000;
-      if(!_ep.play10done && mins>=10){ _ep.play10done=true; _givePieces(2,'Play 10 Minutes'); }
-      if(!_ep.play30done && mins>=30){ _ep.play30done=true; _givePieces(4,'Play 30 Minutes'); }
-    }, 30000);
-
-    setTimeout(_injectEventTab, 800);
-
-    console.log('[PATCH v6] Event/Mission system applied!');
-    console.log('[PATCH v5] Plane, birds, parks, waterfall, dry leaves, farmer skins applied!');
+    
+    console.log('[PATCH v3] Parks, waterfalls, dry trees & birds applied!');
   });
 })();
 </script>
