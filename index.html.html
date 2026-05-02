@@ -4362,47 +4362,34 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
       ctx.save(); ctx.scale(1,0.25);
       ctx.beginPath(); ctx.ellipse(0,52,14,6,0,0,Math.PI*2);
       ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fill(); ctx.restore();
-      if(typeof G !== 'undefined' && typeof SKINS !== 'undefined'){
+      if(typeof G !== 'undefined' && typeof SKINS !== 'undefined' && typeof _drawCharDir !== 'undefined'){
         var sk_l=SKINS[G.skin]||SKINS[0];
-        var legBend=Math.abs(Math.sin(t*11))*5;
-        var bendFwd=Math.abs(Math.sin(t*10))*7;
-        var armWave=Math.sin(t*12)*0.35;
-        ctx.fillStyle=sk_l.c||'#2a3a5a';
-        ctx.beginPath(); ctx.roundRect(-10,12,10,22-legBend,3); ctx.fill();
-        ctx.beginPath(); ctx.roundRect(1,12,10,22-legBend,3); ctx.fill();
-        ctx.fillStyle='#1a1a1a';
-        ctx.beginPath(); ctx.roundRect(-12,32-legBend,13,7,3); ctx.fill();
-        ctx.beginPath(); ctx.roundRect(1,32-legBend,13,7,3); ctx.fill();
-        ctx.fillStyle=sk_l.c||'#c0b8a8';
-        ctx.beginPath(); ctx.roundRect(-13,-12+bendFwd,26,26,5); ctx.fill();
-        ctx.fillStyle='rgba(70,60,50,0.65)'; ctx.font='bold 14px Courier New'; ctx.textAlign='center';
-        ctx.fillText('H',0,2+bendFwd);
+        var bobL=Math.sin(t*12)*3;
+        // Render REAL character with full skin/hair/face/outfit
+        _drawCharDir(ctx,'front',sk_l,0,bobL);
+        // Arms hugging belly overlay
+        var armWaveL=Math.sin(t*12)*0.35;
         ctx.strokeStyle='#c8956a'; ctx.lineWidth=5; ctx.lineCap='round';
-        ctx.beginPath(); ctx.moveTo(-21,-8+bendFwd); ctx.quadraticCurveTo(-10+armWave*8,6+bendFwd,2,4+bendFwd); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(21,-8+bendFwd); ctx.quadraticCurveTo(10-armWave*8,6+bendFwd,-2,4+bendFwd); ctx.stroke();
-        ctx.fillStyle='#c8956a';
-        ctx.beginPath(); ctx.ellipse(0,-14+bendFwd*0.5,6,7,0,0,Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(0,-27+bendFwd*0.4,13,14,0,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#1a0a04';
-        ctx.beginPath(); ctx.arc(0,-27+bendFwd*0.4,12,Math.PI,0); ctx.lineTo(0,-27+bendFwd*0.4); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(-10,-27+bendFwd*0.4); ctx.quadraticCurveTo(-6,-32+bendFwd*0.4,0,-32+bendFwd*0.4); ctx.quadraticCurveTo(6,-32+bendFwd*0.4,10,-27+bendFwd*0.4); ctx.closePath(); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(-21,-8); ctx.quadraticCurveTo(-10+armWaveL*8,6,2,4); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(21,-8); ctx.quadraticCurveTo(10-armWaveL*8,6,-2,4); ctx.stroke();
+        // Squinting eyes overlay
         ctx.strokeStyle='#1a0a0a'; ctx.lineWidth=2.2; ctx.lineCap='round';
         var squint=0.5+Math.abs(Math.sin(t*9))*0.5;
-        ctx.beginPath(); ctx.moveTo(-8,-27+bendFwd*0.4); ctx.quadraticCurveTo(-5,-24+squint+bendFwd*0.4,-2,-27+bendFwd*0.4); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(2,-27+bendFwd*0.4); ctx.quadraticCurveTo(5,-24+squint+bendFwd*0.4,8,-27+bendFwd*0.4); ctx.stroke();
-        var mOpen=4+Math.abs(Math.sin(t*16))*7;
+        ctx.beginPath(); ctx.moveTo(-8,-27); ctx.quadraticCurveTo(-5,-24+squint,-2,-27); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(2,-27); ctx.quadraticCurveTo(5,-24+squint,8,-27); ctx.stroke();
+        // Open laughing mouth
+        var mOpen=3+Math.abs(Math.sin(t*16))*6;
         ctx.fillStyle='#6a1010';
-        ctx.beginPath(); ctx.ellipse(0,-19+bendFwd*0.3,5,mOpen,0,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(0,-19,5,mOpen,0,0,Math.PI*2); ctx.fill();
         ctx.fillStyle='#fff';
-        ctx.beginPath(); ctx.rect(-4.5,-19+bendFwd*0.3-mOpen*0.55,9,2.5); ctx.fill();
-        ctx.beginPath(); ctx.rect(-3.5,-19+bendFwd*0.3+mOpen*0.1,7,2); ctx.fill();
-        ctx.fillStyle='#e05060';
-        ctx.beginPath(); ctx.ellipse(0,-19+bendFwd*0.3+mOpen*0.3,3,2.5,0,0,Math.PI); ctx.fill();
+        ctx.beginPath(); ctx.rect(-4.5,-19-mOpen*0.55,9,2.2); ctx.fill();
+        ctx.beginPath(); ctx.rect(-3.5,-19+mOpen*0.1,7,1.8); ctx.fill();
+        // Tears
         ctx.strokeStyle='#3399ee'; ctx.lineWidth=2; ctx.lineCap='round';
         for(var ti=0;ti<2;ti++){
           var tearOff=(t*1.8+ti*0.5)%1;
           var txx=ti===0?-8:8;
-          var tyy=-24+bendFwd*0.4+tearOff*20;
+          var tyy=-24+tearOff*20;
           ctx.globalAlpha=1-tearOff;
           ctx.beginPath(); ctx.moveTo(txx,tyy); ctx.lineTo(txx-ti*2,tyy+8); ctx.stroke();
           ctx.fillStyle='#3399ee';
@@ -4501,54 +4488,12 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
       ctx.beginPath(); ctx.arc(-18,-22,2,0,Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.arc(18,-22,2,0,Math.PI*2); ctx.fill();
 
-      // ── CHARACTER SEATED ──
-      var skin2='#c8956a', hair2='#1a0a04';
-      // Use actual skin color if available
-      var skc='#2a3a5a';
-      if(typeof G !== 'undefined' && typeof SKINS !== 'undefined'){
+      // ── CHARACTER SEATED — render REAL character on throne ──
+      if(typeof G !== 'undefined' && typeof SKINS !== 'undefined' && typeof _drawCharDir !== 'undefined'){
         var skObj=SKINS[G.skin]||SKINS[0];
-        skc=skObj.c||'#2a3a5a';
+        _drawCharDir(ctx,'front',skObj,0,0);
       }
-      // Legs — thighs horizontal, calves hanging
-      ctx.fillStyle=skc;
-      ctx.beginPath(); ctx.roundRect(-20,12,18,9,3); ctx.fill();
-      ctx.beginPath(); ctx.roundRect(2,12,18,9,3); ctx.fill();
-      ctx.beginPath(); ctx.roundRect(-14,20,8,16,3); ctx.fill();
-      ctx.beginPath(); ctx.roundRect(6,20,8,16,3); ctx.fill();
-      // Shoes
-      ctx.fillStyle='#1a1a1a';
-      ctx.beginPath(); ctx.roundRect(-16,34,10,6,3); ctx.fill();
-      ctx.beginPath(); ctx.roundRect(6,34,10,6,3); ctx.fill();
-      // Torso
-      ctx.fillStyle='#c0b8a8';
-      ctx.beginPath(); ctx.roundRect(-13,-12,26,26,5); ctx.fill();
-      ctx.fillStyle='rgba(70,60,50,0.65)'; ctx.font='bold 14px Courier New'; ctx.textAlign='center';
-      ctx.fillText('H',0,2);
-      // Arms on rests
-      ctx.fillStyle='#c8b8a8';
-      ctx.beginPath(); ctx.roundRect(-25,-4,10,16,4); ctx.fill();
-      ctx.beginPath(); ctx.roundRect(15,-4,10,16,4); ctx.fill();
-      ctx.fillStyle=skin2;
-      ctx.beginPath(); ctx.ellipse(-20,13,5,4,0.2,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(20,13,5,4,-0.2,0,Math.PI*2); ctx.fill();
-      // Neck
-      ctx.fillStyle=skin2;
-      ctx.beginPath(); ctx.ellipse(0,-14,6,7,0,0,Math.PI*2); ctx.fill();
-      // Head
-      ctx.fillStyle=skin2;
-      ctx.beginPath(); ctx.ellipse(0,-26,13,14,0,0,Math.PI*2); ctx.fill();
-      // Hair
-      ctx.fillStyle=hair2;
-      ctx.beginPath(); ctx.arc(0,-26,12,Math.PI,0); ctx.lineTo(0,-26); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(-10,-26); ctx.quadraticCurveTo(-6,-31,0,-31); ctx.quadraticCurveTo(6,-31,10,-26); ctx.closePath(); ctx.fill();
-      // Eyes
-      ctx.fillStyle='#1a0a0a';
-      ctx.beginPath(); ctx.ellipse(-5,-27,2.2,2.2,0,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(5,-27,2.2,2.2,0,0,Math.PI*2); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,0.7)';
-      ctx.beginPath(); ctx.arc(-4,-28,0.8,0,Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(6,-28,0.8,0,Math.PI*2); ctx.fill();
-      // Smile
+      // Smug satisfied smile overlay
       ctx.strokeStyle='#6a1a1a'; ctx.lineWidth=2; ctx.lineCap='round';
       ctx.beginPath(); ctx.moveTo(-5,-21); ctx.quadraticCurveTo(0,-17,5,-21); ctx.stroke();
 
@@ -5226,97 +5171,52 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
     var shakeX = Math.sin(t * 18) * 7;
     var shakeY = Math.abs(Math.sin(t * 11)) * -10;
     var tilt   = Math.sin(t * 14) * 0.18;
-    var sc     = 1.35; // match game player scale
+    var sc     = 1.3; // match drawPlayer scale
+    var bendFwd = Math.abs(Math.sin(t*10))*4;
+    var bob = Math.sin(t*12)*3;
 
-    c.translate(sx + shakeX, sy + shakeY + 22);
+    // Render the REAL character (skin/hair/outfit/face) with shake & tilt
+    c.translate(sx + shakeX, sy + shakeY);
     c.rotate(tilt);
     c.scale(sc, sc);
-
     // Shadow
     c.save(); c.scale(1,0.25);
     c.beginPath(); c.ellipse(0,52,14,6,0,0,Math.PI*2);
     c.fillStyle='rgba(0,0,0,0.35)'; c.fill(); c.restore();
-
-    // LEGS (bent slightly — knees up from laughing)
-    var legBend = Math.abs(Math.sin(t*11))*6;
-    c.fillStyle='#2a3a5a';
-    c.beginPath(); c.roundRect(-10,12,10,22-legBend,3); c.fill();
-    c.beginPath(); c.roundRect(1,12,10,22-legBend,3); c.fill();
-    // Shoes
-    c.fillStyle='#1a1a1a';
-    c.beginPath(); c.roundRect(-12,32-legBend,13,7,3); c.fill();
-    c.beginPath(); c.roundRect(1,32-legBend,13,7,3); c.fill();
-
-    // TORSO bent forward
-    var bendFwd = Math.abs(Math.sin(t*10))*8;
-    c.fillStyle='#c0b8a8';
-    c.beginPath(); c.roundRect(-13,-12+bendFwd,26,26,5); c.fill();
-    // H emblem
-    c.fillStyle='rgba(70,60,50,0.65)'; c.font='bold 14px Courier New'; c.textAlign='center';
-    c.fillText('H',0,2+bendFwd);
-
-    // ARMS hugging belly — both arms curved inward
+    if(typeof G!=='undefined' && typeof SKINS!=='undefined' && typeof _drawCharDir!=='undefined'){
+      var skL = SKINS[G.skin] || SKINS[0];
+      _drawCharDir(c, 'front', skL, 0, bob);
+    }
+    // Arms hugging belly overlay (curved on top of torso)
     var armWave = Math.sin(t*12)*0.35;
     c.strokeStyle='#c8956a'; c.lineWidth=5; c.lineCap='round';
-    // Left arm bending in to hug stomach
-    c.beginPath();
-    c.moveTo(-21,-8+bendFwd);
-    c.quadraticCurveTo(-10+armWave*8, 6+bendFwd, 2, 4+bendFwd);
-    c.stroke();
-    // Right arm bending in to hug stomach
-    c.beginPath();
-    c.moveTo(21,-8+bendFwd);
-    c.quadraticCurveTo(10-armWave*8, 6+bendFwd, -2, 4+bendFwd);
-    c.stroke();
-
-    // NECK
-    c.fillStyle='#c8956a';
-    c.beginPath(); c.ellipse(0,-14+bendFwd*0.5, 6,7, 0,0,Math.PI*2); c.fill();
-
-    // HEAD (tilted back laughing)
-    c.fillStyle='#c8956a';
-    c.beginPath(); c.ellipse(0,-27+bendFwd*0.4, 13,14, 0,0,Math.PI*2); c.fill();
-
-    // HAIR
-    c.fillStyle='#1a0a04';
-    c.beginPath(); c.arc(0,-27+bendFwd*0.4,12,Math.PI,0); c.lineTo(0,-27+bendFwd*0.4); c.fill();
-    c.beginPath(); c.moveTo(-10,-27+bendFwd*0.4); c.quadraticCurveTo(-6,-32+bendFwd*0.4,0,-32+bendFwd*0.4); c.quadraticCurveTo(6,-32+bendFwd*0.4,10,-27+bendFwd*0.4); c.closePath(); c.fill();
-
-    // SQUINTING EYES — closed arcs from laughing
+    c.beginPath(); c.moveTo(-21,-8+bendFwd); c.quadraticCurveTo(-10+armWave*8, 6+bendFwd, 2, 4+bendFwd); c.stroke();
+    c.beginPath(); c.moveTo(21,-8+bendFwd); c.quadraticCurveTo(10-armWave*8, 6+bendFwd, -2, 4+bendFwd); c.stroke();
+    // Open laughing mouth + teeth on top of face
+    var mOpen = 3 + Math.abs(Math.sin(t*16))*5;
+    c.fillStyle='#6a1010';
+    c.beginPath(); c.ellipse(0,-19, 5, mOpen, 0,0,Math.PI*2); c.fill();
+    c.fillStyle='#fff';
+    c.beginPath(); c.rect(-4.5,-19-mOpen*0.55, 9, 2.2); c.fill();
+    c.beginPath(); c.rect(-3.5,-19+mOpen*0.1, 7, 1.8); c.fill();
+    // Squint eyes overlay
     c.strokeStyle='#1a0a0a'; c.lineWidth=2.2; c.lineCap='round';
     var squint = 0.5 + Math.abs(Math.sin(t*9))*0.5;
-    c.beginPath(); c.moveTo(-8,-27+bendFwd*0.4); c.quadraticCurveTo(-5,-24+squint+bendFwd*0.4,-2,-27+bendFwd*0.4); c.stroke();
-    c.beginPath(); c.moveTo(2,-27+bendFwd*0.4); c.quadraticCurveTo(5,-24+squint+bendFwd*0.4,8,-27+bendFwd*0.4); c.stroke();
-
-    // OPEN MOUTH wide laughing
-    var mOpen = 4 + Math.abs(Math.sin(t*16))*6;
-    c.fillStyle='#6a1010';
-    c.beginPath(); c.ellipse(0,-19+bendFwd*0.3, 5, mOpen, 0,0,Math.PI*2); c.fill();
-    // Teeth top row
-    c.fillStyle='#fff';
-    c.beginPath(); c.rect(-4.5,-19+bendFwd*0.3-mOpen*0.55, 9, 2.5); c.fill();
-    // Teeth bottom row
-    c.beginPath(); c.rect(-3.5,-19+bendFwd*0.3+mOpen*0.1, 7, 2); c.fill();
-    // Tongue
-    c.fillStyle='#e05060';
-    c.beginPath(); c.ellipse(0,-19+bendFwd*0.3+mOpen*0.3, 3, 2.5, 0,0,Math.PI); c.fill();
-
-    // TEARS of laughter streaming down
+    c.beginPath(); c.moveTo(-8,-27); c.quadraticCurveTo(-5,-24+squint,-2,-27); c.stroke();
+    c.beginPath(); c.moveTo(2,-27);  c.quadraticCurveTo(5,-24+squint,8,-27); c.stroke();
+    // Tears of laughter
     c.strokeStyle='#3399ee'; c.lineWidth=2; c.lineCap='round';
     for(var ti=0;ti<2;ti++){
-      var tearOff = (t*1.8 + ti*0.5) % 1;
-      var tx = ti===0 ? -8 : 8;
-      var ty = -24 + bendFwd*0.4 + tearOff*20;
-      c.globalAlpha = 1 - tearOff;
-      c.beginPath(); c.moveTo(tx, ty); c.lineTo(tx-ti*2, ty+8); c.stroke();
+      var tearOff=(t*1.8+ti*0.5)%1;
+      var tx2=ti===0?-8:8;
+      var ty2=-24+tearOff*20;
+      c.globalAlpha=1-tearOff;
+      c.beginPath(); c.moveTo(tx2,ty2); c.lineTo(tx2-ti*2,ty2+8); c.stroke();
       c.fillStyle='#3399ee';
-      c.beginPath(); c.ellipse(tx-ti*2, ty+8, 1.5, 2.5, 0,0,Math.PI*2); c.fill();
+      c.beginPath(); c.ellipse(tx2-ti*2,ty2+8,1.5,2.5,0,0,Math.PI*2); c.fill();
     }
     c.globalAlpha=1;
-
-    c.scale(1/sc,1/sc);
-    c.rotate(-tilt);
-    c.translate(-(sx+shakeX), -(sy+shakeY+22));
+    c.setTransform(1,0,0,1,0,0);
 
     // Speech bubble HA HA HA
     var bx = sx + 28, by = sy - 80;
@@ -5425,63 +5325,14 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
     c.beginPath(); c.arc(-18,-22,2,0,Math.PI*2); c.fill();
     c.beginPath(); c.arc(18,-22,2,0,Math.PI*2); c.fill();
 
-    // ── CHARACTER SEATED (legs horizontal, body upright) ──
-    var skin='#c8956a', hair='#1a0a04';
-
-    // Seated legs — thighs horizontal outward, calves hanging down
-    c.fillStyle='#2a3a5a';
-    // Left thigh horizontal
-    c.beginPath(); c.roundRect(-20,12,18,9,3); c.fill();
-    // Right thigh horizontal
-    c.beginPath(); c.roundRect(2,12,18,9,3); c.fill();
-    // Left calf hanging
-    c.beginPath(); c.roundRect(-14,20,8,16,3); c.fill();
-    // Right calf hanging
-    c.beginPath(); c.roundRect(6,20,8,16,3); c.fill();
-    // Shoes
-    c.fillStyle='#1a1a1a';
-    c.beginPath(); c.roundRect(-16,34,10,6,3); c.fill();
-    c.beginPath(); c.roundRect(6,34,10,6,3); c.fill();
-
-    // Torso sitting upright
-    c.fillStyle='#c0b8a8';
-    c.beginPath(); c.roundRect(-13,-12,26,26,5); c.fill();
-    c.fillStyle='rgba(70,60,50,0.65)'; c.font='bold 14px Courier New'; c.textAlign='center';
-    c.fillText('H',0,2);
-
-    // Arms resting on arm rests — relaxed, slightly spread
-    c.fillStyle='#c8b8a8';
-    // Left arm resting on left arm rest
-    c.beginPath(); c.roundRect(-25,-4,10,16,4); c.fill();
-    // Right arm resting on right arm rest
-    c.beginPath(); c.roundRect(15,-4,10,16,4); c.fill();
-    // Hands resting
-    c.fillStyle=skin;
-    c.beginPath(); c.ellipse(-20,13,5,4,0.2,0,Math.PI*2); c.fill();
-    c.beginPath(); c.ellipse(20,13,5,4,-0.2,0,Math.PI*2); c.fill();
-
-    // Neck
-    c.fillStyle=skin;
-    c.beginPath(); c.ellipse(0,-14,6,7,0,0,Math.PI*2); c.fill();
-
-    // Head
-    c.fillStyle=skin;
-    c.beginPath(); c.ellipse(0,-26,13,14,0,0,Math.PI*2); c.fill();
-
-    // Hair
-    c.fillStyle=hair;
-    c.beginPath(); c.arc(0,-26,12,Math.PI,0); c.lineTo(0,-26); c.fill();
-    c.beginPath(); c.moveTo(-10,-26); c.quadraticCurveTo(-6,-31,0,-31); c.quadraticCurveTo(6,-31,10,-26); c.closePath(); c.fill();
-
-    // Eyes — relaxed/satisfied look
-    c.fillStyle='#1a0a0a';
-    c.beginPath(); c.ellipse(-5,-27,2.2,2.2,0,0,Math.PI*2); c.fill();
-    c.beginPath(); c.ellipse(5,-27,2.2,2.2,0,0,Math.PI*2); c.fill();
-    c.fillStyle='rgba(255,255,255,0.7)';
-    c.beginPath(); c.arc(-4,-28,0.8,0,Math.PI*2); c.fill();
-    c.beginPath(); c.arc(6,-28,0.8,0,Math.PI*2); c.fill();
-
-    // Smug satisfied smile
+    // ── CHARACTER SEATED — render REAL character (skin/hair/face/outfit) ──
+    if(typeof G!=='undefined' && typeof SKINS!=='undefined' && typeof _drawCharDir!=='undefined'){
+      var skS = SKINS[G.skin] || SKINS[0];
+      _drawCharDir(c, 'front', skS, 0, 0);
+    }
+    // Arm-rest cover overlays so arms look resting on chair
+    c.fillStyle='rgba(0,0,0,0.001)';
+    // Smug satisfied smile overlay (on top of default face)
     c.strokeStyle='#6a1a1a'; c.lineWidth=2; c.lineCap='round';
     c.beginPath(); c.moveTo(-5,-21); c.quadraticCurveTo(0,-17,5,-21); c.stroke();
 
