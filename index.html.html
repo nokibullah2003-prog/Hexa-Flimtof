@@ -6288,5 +6288,622 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
   });
 })();
 </script>
+
+<script>
+(function(){
+  // ═══════════════════════════════════════
+  // PATCH: Add Farmer & Farmer's Wife skins
+  // Drawn fully in canvas like existing chars
+  // ═══════════════════════════════════════
+  function waitSkins(cb){
+    if(typeof SKINS!=='undefined'&&typeof G!=='undefined'&&typeof _drawCharDir!=='undefined') cb();
+    else setTimeout(function(){waitSkins(cb);},100);
+  }
+  waitSkins(function(){
+
+    // Add new skins — no images, pure canvas like existing skins
+    var farmerIdx = SKINS.length;
+    SKINS.push({name:'FARMER', c:'#5a7acc', h:'#7a5a30', price:0, cls:'farmer'});
+    var wifeIdx = SKINS.length;
+    SKINS.push({name:"FARMER WIFE", c:'#cc4444', h:'#5a8a30', price:0, cls:'farmerwife'});
+
+    // ═══════════════════════════════════════
+    // EVENT MISSION SYSTEM
+    // ═══════════════════════════════════════
+    var EVT = {
+      pieces: 0,
+      missions: [
+        {id:'kill10',  label:'Kill 10 Enemies',  target:10, reward:2, type:'kills',   done:false},
+        {id:'play10',  label:'Play 10 Minutes',  target:10, reward:2, type:'playtime', done:false},
+        {id:'play30',  label:'Play 30 Minutes',  target:30, reward:4, type:'playtime', done:false},
+        {id:'kill20',  label:'Kill 20 Enemies',  target:20, reward:4, type:'kills',   done:false},
+      ],
+      farmerUnlocked: false,
+      wifeUnlocked: false,
+      totalPlayMinutes: 0,
+      totalKills: 0
+    };
+
+    // Load event progress
+    try {
+      var saved = JSON.parse(localStorage.getItem('hexaEvent') || '{}');
+      if(saved.pieces!==undefined) EVT.pieces = saved.pieces;
+      if(saved.missions) {
+        saved.missions.forEach(function(sm){
+          var m = EVT.missions.find(function(em){return em.id===sm.id;});
+          if(m) m.done = sm.done;
+        });
+      }
+      if(saved.farmerUnlocked) EVT.farmerUnlocked = saved.farmerUnlocked;
+      if(saved.wifeUnlocked) EVT.wifeUnlocked = saved.wifeUnlocked;
+      if(saved.totalPlayMinutes) EVT.totalPlayMinutes = saved.totalPlayMinutes;
+      if(saved.totalKills) EVT.totalKills = saved.totalKills;
+      // Restore unlocked skins
+      if(EVT.farmerUnlocked && !G.owned.includes(farmerIdx)) G.owned.push(farmerIdx);
+      if(EVT.wifeUnlocked && !G.owned.includes(wifeIdx)) G.owned.push(wifeIdx);
+    } catch(e){}
+
+    function saveEvent(){
+      try {
+        localStorage.setItem('hexaEvent', JSON.stringify({
+          pieces: EVT.pieces,
+          missions: EVT.missions.map(function(m){return {id:m.id, done:m.done};}),
+          farmerUnlocked: EVT.farmerUnlocked,
+          wifeUnlocked: EVT.wifeUnlocked,
+          totalPlayMinutes: EVT.totalPlayMinutes,
+          totalKills: EVT.totalKills
+        }));
+      } catch(e){}
+    }
+
+    // Track play time
+    setInterval(function(){
+      if(typeof G!=='undefined' && G.phase==='game'){
+        EVT.totalPlayMinutes += 1/60;
+        checkMissions();
+        saveEvent();
+      }
+    }, 1000);
+
+    // Patch killEnemy to track kills
+    var _origKillEnemy = window.killEnemy;
+    window.killEnemy = function(e){
+      if(_origKillEnemy) _origKillEnemy(e);
+      EVT.totalKills++;
+      G.kills++;
+      checkMissions();
+      saveEvent();
+    };
+
+    function checkMissions(){
+      EVT.missions.forEach(function(m){
+        if(m.done) return;
+        var progress = 0;
+        if(m.type==='kills') progress = EVT.totalKills;
+        else if(m.type==='playtime') progress = EVT.totalPlayMinutes;
+        if(progress >= m.target){
+          m.done = true;
+          EVT.pieces += m.reward;
+          saveEvent();
+        }
+      });
+      // Check if 12 pieces reached
+      if(EVT.pieces >= 12 && !EVT.farmerUnlocked){
+        EVT.farmerUnlocked = true;
+        if(!G.owned.includes(farmerIdx)) G.owned.push(farmerIdx);
+        saveEvent();
+      }
+      if(EVT.pieces >= 12 && !EVT.wifeUnlocked){
+        EVT.wifeUnlocked = true;
+        if(!G.owned.includes(wifeIdx)) G.owned.push(wifeIdx);
+        saveEvent();
+      }
+    }
+
+    // ═══════════════════════════════════════
+    // Patch _drawCharDir to add farmer/farmerwife
+    // drawing using same canvas approach as existing chars
+    // ═══════════════════════════════════════
+    var _origDrawCharDir = window._drawCharDir;
+    window._drawCharDir = function(c, dir, sk, jo, bob){
+      var cls = sk.cls || 'default';
+      if(cls !== 'farmer' && cls !== 'farmerwife'){
+        return _origDrawCharDir(c, dir, sk, jo, bob);
+      }
+
+      var isFarmer = cls === 'farmer';
+      var skinTone = '#c8956a';
+      var hairCol = isFarmer ? '#3a2010' : '#1a0a04';
+      var moving = (Math.abs(bob) > 0.5);
+
+      function rect(x,y,w,h,r,fill){ c.fillStyle=fill; c.beginPath(); c.roundRect(x,y+jo,w,h,r); c.fill(); }
+      function ellip(x,y,rx,ry,fill){ c.fillStyle=fill; c.beginPath(); c.ellipse(x,y+jo,rx,ry,0,0,Math.PI*2); c.fill(); }
+
+      if(dir === 'front'){
+        var leg1Y = moving ? bob*0.6 : 0;
+        var leg2Y = moving ? -bob*0.6 : 0;
+
+        // ── OVERALLS / LEGS ──
+        // Denim overalls — blue for farmer, blue-grey for wife
+        var denimCol = isFarmer ? '#4a6a9a' : '#5a7aaa';
+        var denimDark = isFarmer ? '#3a5a8a' : '#4a6a9a';
+        rect(-11, 12+leg1Y, 10, 26, 3, denimCol);
+        rect(2, 12+leg2Y, 10, 26, 3, denimCol);
+        // Leg seam
+        c.strokeStyle=denimDark; c.lineWidth=0.8;
+        c.beginPath(); c.moveTo(-6,14+jo+leg1Y); c.lineTo(-6,36+jo+leg1Y); c.stroke();
+        c.beginPath(); c.moveTo(7,14+jo+leg2Y); c.lineTo(7,36+jo+leg2Y); c.stroke();
+        // Mud patches on legs
+        c.fillStyle='#6a4a20'; c.globalAlpha=0.4;
+        c.beginPath(); c.ellipse(-8, 28+jo+leg1Y, 3, 2, 0.5, 0, Math.PI*2); c.fill();
+        c.beginPath(); c.ellipse(6, 32+jo+leg2Y, 2, 1.5, -0.4, 0, Math.PI*2); c.fill();
+        c.globalAlpha=1;
+
+        // Boots
+        var bootCol = '#3a2810';
+        rect(-13, 36+jo+leg1Y, 14, 8, 3, bootCol);
+        rect(0, 36+jo+leg2Y, 14, 8, 3, bootCol);
+        rect(-14, 42+jo+leg1Y, 15, 3, 2, '#2a1a08');
+        rect(0, 42+jo+leg2Y, 15, 3, 2, '#2a1a08');
+
+        // ── TORSO — shirt under overalls bib ──
+        var shirtCol = isFarmer ? '#3a6aaa' : '#cc3333';
+        // Shirt sleeves visible
+        rect(-20, -10, 9, 20, 4, shirtCol);
+        rect(12, -10, 9, 20, 4, shirtCol);
+        // Checkered shirt pattern on sleeves
+        c.strokeStyle = isFarmer ? '#2a5a9a' : '#aa2222'; c.lineWidth=1.5; c.globalAlpha=0.4;
+        for(var ci=0;ci<3;ci++){
+          c.beginPath(); c.moveTo(-20, -6+ci*6+jo); c.lineTo(-11, -6+ci*6+jo); c.stroke();
+          c.beginPath(); c.moveTo(12, -6+ci*6+jo); c.lineTo(21, -6+ci*6+jo); c.stroke();
+        }
+        c.globalAlpha=1;
+
+        // Overalls bib (chest)
+        var bibGrad = c.createLinearGradient(-9,-12,9,12);
+        bibGrad.addColorStop(0, denimCol); bibGrad.addColorStop(1, denimDark);
+        c.fillStyle=bibGrad;
+        c.beginPath(); c.roundRect(-9,-12+jo,18,26,3); c.fill();
+        // Bib pocket
+        rect(-6, -8, 12, 10, 2, denimDark);
+        c.strokeStyle='rgba(255,255,255,0.15)'; c.lineWidth=1;
+        c.beginPath(); c.roundRect(-6,-8+jo,12,10,2); c.stroke();
+        // Bib pocket button
+        c.fillStyle='#c8b880'; c.beginPath(); c.arc(0,-3+jo,1.5,0,Math.PI*2); c.fill();
+        // Bib straps
+        c.strokeStyle=denimCol; c.lineWidth=4; c.lineCap='round';
+        c.beginPath(); c.moveTo(-7,-12+jo); c.lineTo(-13,-12+jo); c.stroke();
+        c.beginPath(); c.moveTo(7,-12+jo); c.lineTo(13,-12+jo); c.stroke();
+
+        if(!isFarmer){
+          // Wife: apron over overalls
+          c.fillStyle='rgba(255,255,255,0.7)';
+          c.beginPath(); c.roundRect(-7,-4+jo,14,18,2); c.fill();
+          c.strokeStyle='rgba(200,200,200,0.5)'; c.lineWidth=1;
+          c.beginPath(); c.roundRect(-7,-4+jo,14,18,2); c.stroke();
+          // Apron tie strings
+          c.strokeStyle='rgba(220,220,220,0.7)'; c.lineWidth=2;
+          c.beginPath(); c.moveTo(-7,-4+jo); c.lineTo(-13,-2+jo); c.stroke();
+          c.beginPath(); c.moveTo(7,-4+jo); c.lineTo(13,-2+jo); c.stroke();
+        }
+
+        // ── TOOL (front) ──
+        if(isFarmer){
+          // Pitchfork — held in right hand
+          c.strokeStyle='#5a3a10'; c.lineWidth=3; c.lineCap='round';
+          c.beginPath(); c.moveTo(22, 6+jo); c.lineTo(22, -40+jo); c.stroke();
+          // Tines
+          c.lineWidth=2;
+          c.beginPath(); c.moveTo(16,-36+jo); c.lineTo(16,-26+jo); c.stroke();
+          c.beginPath(); c.moveTo(22,-36+jo); c.lineTo(22,-26+jo); c.stroke();
+          c.beginPath(); c.moveTo(28,-36+jo); c.lineTo(28,-26+jo); c.stroke();
+          // Crossbar
+          c.beginPath(); c.moveTo(14,-26+jo); c.lineTo(30,-26+jo); c.stroke();
+          c.strokeStyle='#7a5a20'; c.lineWidth=1;
+          c.beginPath(); c.moveTo(22,-26+jo); c.lineTo(22,-22+jo); c.stroke();
+        } else {
+          // Basket in right hand — vegetables
+          c.fillStyle='#8a6030'; c.beginPath(); c.roundRect(14,4+jo,16,12,2); c.fill();
+          c.strokeStyle='#6a4a20'; c.lineWidth=1;
+          c.beginPath(); c.roundRect(14,4+jo,16,12,2); c.stroke();
+          // Basket weave
+          c.strokeStyle='#6a4a20'; c.lineWidth=0.7; c.globalAlpha=0.6;
+          for(var bw=0;bw<3;bw++){ c.beginPath(); c.moveTo(14,7+bw*4+jo); c.lineTo(30,7+bw*4+jo); c.stroke(); }
+          c.globalAlpha=1;
+          // Basket handle
+          c.strokeStyle='#8a6030'; c.lineWidth=2;
+          c.beginPath(); c.arc(22,4+jo,6,Math.PI,0); c.stroke();
+          // Vegetables — tomato, green
+          c.fillStyle='#cc3322'; c.beginPath(); c.arc(18,6+jo,3,0,Math.PI*2); c.fill();
+          c.fillStyle='#4a8a20'; c.beginPath(); c.arc(24,5+jo,3,0,Math.PI*2); c.fill();
+          c.fillStyle='#ee8820'; c.beginPath(); c.arc(21,9+jo,2.5,0,Math.PI*2); c.fill();
+        }
+
+        // ── NECK ──
+        ellip(0, -14, 5, 6, skinTone);
+
+        // ── HEAD ──
+        ellip(0, -26, 13, 14, skinTone);
+
+        // ── STRAW HAT — sits ON head (head top ~-38, hat brim at -38) ──
+        var hatBrimCol = isFarmer ? '#c8a840' : '#d4b850';
+        var hatTopCol = isFarmer ? '#b89030' : '#c8a038';
+        // Brim — sits at head top
+        c.fillStyle=hatBrimCol;
+        c.beginPath(); c.ellipse(0,-38+jo,21,5,0,0,Math.PI*2); c.fill();
+        c.strokeStyle='#8a6820'; c.lineWidth=1;
+        c.beginPath(); c.ellipse(0,-38+jo,21,5,0,0,Math.PI*2); c.stroke();
+        // Hat top — rises above brim
+        var hatGrad = c.createLinearGradient(-13,-52,13,-38);
+        hatGrad.addColorStop(0, hatTopCol); hatGrad.addColorStop(1, hatBrimCol);
+        c.fillStyle=hatGrad;
+        c.beginPath(); c.roundRect(-13,-52+jo,26,16,3); c.fill();
+        c.strokeStyle='#8a6820'; c.lineWidth=1;
+        c.beginPath(); c.roundRect(-13,-52+jo,26,16,3); c.stroke();
+        // Hat band just above brim
+        c.fillStyle= isFarmer ? '#4a6a2a' : '#cc4444';
+        c.beginPath(); c.roundRect(-12,-40+jo,24,3,1); c.fill();
+        // Patch on hat (for farmer male)
+        if(isFarmer){
+          c.fillStyle='#a88030'; c.strokeStyle='#8a6020'; c.lineWidth=0.8;
+          c.beginPath(); c.roundRect(-2,-50+jo,7,6,1); c.fill(); c.stroke();
+        } else {
+          // Wife hat: ribbon bow on band
+          c.fillStyle='#ffffff'; c.globalAlpha=0.7;
+          c.beginPath(); c.ellipse(-6,-39+jo,4,2.5,0.4,0,Math.PI*2); c.fill();
+          c.beginPath(); c.ellipse(2,-39+jo,4,2.5,-0.4,0,Math.PI*2); c.fill();
+          c.globalAlpha=1;
+          c.fillStyle='#ffaaaa';
+          c.beginPath(); c.arc(-2,-39+jo,1.5,0,Math.PI*2); c.fill();
+        }
+
+        // ── HAIR ──
+        c.fillStyle=hairCol;
+        if(isFarmer){
+          // Short messy hair peeking under hat
+          c.beginPath(); c.arc(0,-26+jo,12,Math.PI,0); c.lineTo(0,-26+jo); c.fill();
+          c.beginPath(); c.moveTo(-10,-26+jo); c.quadraticCurveTo(-6,-30+jo,0,-30+jo); c.quadraticCurveTo(6,-30+jo,10,-26+jo); c.closePath(); c.fill();
+        } else {
+          // Wife: dark ponytail visible sides
+          c.beginPath(); c.arc(0,-26+jo,12,Math.PI,0); c.lineTo(0,-26+jo); c.fill();
+          c.beginPath(); c.moveTo(-10,-26+jo); c.quadraticCurveTo(-6,-32+jo,0,-32+jo); c.quadraticCurveTo(6,-32+jo,10,-26+jo); c.closePath(); c.fill();
+          // Side strands
+          c.fillStyle=hairCol;
+          c.beginPath(); c.moveTo(-12,-22+jo); c.quadraticCurveTo(-16,-12+jo,-13,0+jo); c.lineTo(-10,0+jo); c.quadraticCurveTo(-13,-12+jo,-8,-22+jo); c.closePath(); c.fill();
+          c.beginPath(); c.moveTo(12,-22+jo); c.quadraticCurveTo(16,-12+jo,13,0+jo); c.lineTo(10,0+jo); c.quadraticCurveTo(13,-12+jo,8,-22+jo); c.closePath(); c.fill();
+        }
+
+        // ── FACE ──
+        // Eyes
+        c.fillStyle='#1a0a0a';
+        c.beginPath(); c.ellipse(-5,-27+jo,2.2,2.2,0,0,Math.PI*2); c.fill();
+        c.beginPath(); c.ellipse(5,-27+jo,2.2,2.2,0,0,Math.PI*2); c.fill();
+        c.fillStyle='rgba(255,255,255,0.7)';
+        c.beginPath(); c.arc(-4,-28+jo,0.8,0,Math.PI*2); c.fill();
+        c.beginPath(); c.arc(6,-28+jo,0.8,0,Math.PI*2); c.fill();
+        // Slight smile
+        c.strokeStyle='#6a3a1a'; c.lineWidth=1.5; c.lineCap='round';
+        if(isFarmer){
+          // Farmer: slight neutral/stern face
+          c.beginPath(); c.moveTo(-4,-21+jo); c.lineTo(4,-21+jo); c.stroke();
+          // Stubble dots
+          c.fillStyle='#8a5a30'; c.globalAlpha=0.4;
+          [-3,-1,1,3].forEach(function(mx){ c.beginPath(); c.arc(mx,-20+jo,0.7,0,Math.PI*2); c.fill(); });
+          c.globalAlpha=1;
+        } else {
+          // Wife: smile
+          c.beginPath(); c.moveTo(-5,-21+jo); c.quadraticCurveTo(0,-17+jo,5,-21+jo); c.stroke();
+          // Rosy cheeks
+          c.fillStyle='#ee7070'; c.globalAlpha=0.3;
+          c.beginPath(); c.ellipse(-9,-23+jo,4,2.5,0,0,Math.PI*2); c.fill();
+          c.beginPath(); c.ellipse(9,-23+jo,4,2.5,0,0,Math.PI*2); c.fill();
+          c.globalAlpha=1;
+        }
+
+      } else {
+        // Side/back views — simpler but matching style
+        var l1y = moving ? bob*0.55 : 0;
+        var l2y = moving ? -bob*0.55 : 0;
+        var denimC = isFarmer ? '#4a6a9a' : '#5a7aaa';
+
+        // Legs
+        rect(-5, 12+l1y, 10, 26, 3, denimC);
+        c.fillStyle=denimC; c.globalAlpha=0.7; c.beginPath(); c.roundRect(1,12+jo+l2y,9,26,3); c.fill(); c.globalAlpha=1;
+        // Boots
+        rect(-6, 36+l1y, 12, 8, 3, '#3a2810');
+        c.fillStyle='#3a2810'; c.globalAlpha=0.6; c.beginPath(); c.roundRect(-6,36+jo+l2y,12,8,3); c.fill(); c.globalAlpha=1;
+
+        // Torso
+        var sCol = isFarmer ? '#3a6aaa' : '#cc3333';
+        rect(-10,-12,20,28,5,sCol);
+        // Overalls bib side
+        c.fillStyle=denimC; c.beginPath(); c.roundRect(-8,-10+jo,16,24,3); c.fill();
+
+        // Arms
+        rect(-17,-10,8,20,4,sCol);
+        if(dir==='right') rect(9,-10,8,20,4,sCol);
+
+        // Neck + head
+        ellip(-1,-14,5,6,skinTone);
+        ellip(-1,-25,12,13,skinTone);
+
+        // Hair
+        c.fillStyle=hairCol;
+        c.beginPath(); c.arc(-1,-25+jo,12,Math.PI*0.8,Math.PI*2.2); c.lineTo(-1,-25+jo); c.fill();
+
+        // Straw hat side — sits on head
+        c.fillStyle= isFarmer ? '#c8a840' : '#d4b850';
+        c.beginPath(); c.ellipse(-1,-37+jo,20,4,0,0,Math.PI*2); c.fill();
+        c.fillStyle= isFarmer ? '#b89030' : '#c8a038';
+        c.beginPath(); c.roundRect(-13,-50+jo,25,14,3); c.fill();
+        c.strokeStyle='#8a6820'; c.lineWidth=1;
+        c.beginPath(); c.roundRect(-13,-50+jo,25,14,3); c.stroke();
+        c.beginPath(); c.ellipse(-1,-37+jo,20,4,0,0,Math.PI*2); c.stroke();
+        c.fillStyle= isFarmer ? '#4a6a2a' : '#cc4444';
+        c.beginPath(); c.roundRect(-12,-39+jo,24,3,1); c.fill();
+
+        // Eye side
+        ellip(dir==='right'?9:-9,-25,2,2,'#1a0a0a');
+      }
+    };
+
+    // ═══════════════════════════════════════
+    // Patch Store: farmer/wife locked, show EVENT label only
+    // ═══════════════════════════════════════
+    var _origRenderStore = window.renderStore;
+    window.renderStore = function(){
+      // Call original but intercept farmer/wife cards
+      _origRenderStore();
+      checkMissions();
+      // Find and replace farmer/wife cards with locked versions
+      var grid = document.getElementById('skinGrid');
+      if(!grid) return;
+      var cards = grid.querySelectorAll('.skin-card');
+      cards.forEach(function(card, i){
+        var nameEl = card.querySelector('.skin-name');
+        if(!nameEl) return;
+        var name = nameEl.textContent.trim();
+        if(name === 'FARMER' || name === 'FARMER WIFE'){
+          // Rebuild as locked event card
+          var charCanvas = document.createElement('canvas');
+          charCanvas.width=60; charCanvas.height=90;
+          var si = name === 'FARMER' ? farmerIdx : wifeIdx;
+          drawCharSVG(charCanvas, si);
+          card.className = 'skin-card';
+          card.style.borderColor = '#ffd70055';
+          card.style.background = 'rgba(255,215,0,0.04)';
+          card.style.cursor = 'default';
+          card.innerHTML = '';
+          var imgDiv = document.createElement('div'); imgDiv.className='skin-img'; imgDiv.appendChild(charCanvas);
+          card.appendChild(imgDiv);
+          var nm = document.createElement('div'); nm.className='skin-name'; nm.textContent=name; card.appendChild(nm);
+          var lbl = document.createElement('div'); lbl.className='skin-cost';
+          lbl.style.color='#ffd700'; lbl.style.fontSize='10px';
+          lbl.innerHTML = '🔒 EVENT ONLY<br><span style="color:#888;font-size:9px;">See EVENT in lobby</span>';
+          card.appendChild(lbl);
+          // Remove old click handler
+          var newCard = card.cloneNode(true); card.parentNode.replaceChild(newCard, card);
+        }
+      });
+    };
+
+    // ═══════════════════════════════════════
+    // Add EVENT button in lobby
+    // ═══════════════════════════════════════
+    function buildEventScreen(){
+      // Create event screen div
+      var evScreen = document.createElement('div');
+      evScreen.id = 'eventScreen';
+      evScreen.className = 'screen';
+      evScreen.style.cssText = 'background:#060d06;padding:14px;overflow:hidden;flex-direction:column;align-items:stretch;';
+
+      // Top bar
+      var topBar = document.createElement('div');
+      topBar.className = 'store-top';
+      topBar.innerHTML = '<div class="store-title" style="color:#ffd700;">⚔ EVENT</div>' +
+        '<div style="display:flex;gap:10px;align-items:center;">' +
+        '<div style="color:#ffd700;font-size:13px;">🧩 <span id="evPieces">' + EVT.pieces + '</span> / 12</div>' +
+        '<div class="close-btn" id="closeEvent">✕ BACK</div></div>';
+      evScreen.appendChild(topBar);
+
+      // Piece progress bar
+      var progWrap = document.createElement('div');
+      progWrap.style.cssText='margin-bottom:14px;';
+      progWrap.innerHTML = '<div style="color:#888;font-size:11px;margin-bottom:6px;letter-spacing:1px;">COLLECT 12 WORKER PIECES TO UNLOCK FARMER & FARMER\'S WIFE</div>' +
+        '<div style="width:100%;height:12px;background:#111;border-radius:6px;overflow:hidden;border:1px solid #ffd70033;">' +
+        '<div id="evProgBar" style="height:100%;background:linear-gradient(90deg,#ffd700,#ff8800);width:' + Math.min(100,EVT.pieces/12*100) + '%;border-radius:6px;transition:width 0.4s;"></div></div>';
+      evScreen.appendChild(progWrap);
+
+      // Character reward cards
+      var rewardRow = document.createElement('div');
+      rewardRow.style.cssText='display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;';
+      [farmerIdx, wifeIdx].forEach(function(si){
+        var sk = SKINS[si];
+        var unlocked = si===farmerIdx ? EVT.farmerUnlocked : EVT.wifeUnlocked;
+        var equipped = G.skin === si;
+        var card = document.createElement('div');
+        card.className = 'skin-card' + (equipped?' equipped':unlocked?' owned':'');
+        card.style.borderColor = equipped ? '#00ff55' : unlocked ? '#ffd700' : '#ffd70033';
+        if(equipped) card.style.background='rgba(0,255,85,0.08)';
+        else if(unlocked) card.style.background='rgba(255,215,0,0.08)';
+        var cv = document.createElement('canvas'); cv.width=60; cv.height=90;
+        drawCharSVG(cv, si);
+        var imgDiv = document.createElement('div'); imgDiv.className='skin-img'; imgDiv.appendChild(cv);
+        var nm = document.createElement('div'); nm.className='skin-name'; nm.textContent=sk.name;
+        var pr = document.createElement('div'); pr.className='skin-cost';
+        if(equipped){ pr.textContent='EQUIPPED'; pr.style.color='#00ff55'; }
+        else if(unlocked){ pr.textContent='EQUIP'; pr.style.color='#ffd700'; }
+        else { pr.innerHTML='🔒 <span style="color:#888">12 🧩 needed</span>'; }
+        card.appendChild(imgDiv); card.appendChild(nm); card.appendChild(pr);
+        if(unlocked && !equipped){
+          card.style.cursor='pointer';
+          card.addEventListener('click',function(){
+            G.skin=si;
+            if(typeof drawCharSVG!=='undefined') drawCharSVG(document.getElementById('lobbyChar'),si);
+            showScreen('lobby');
+          });
+        }
+        rewardRow.appendChild(card);
+      });
+      evScreen.appendChild(rewardRow);
+
+      // Mission list
+      var missionTitle = document.createElement('div');
+      missionTitle.style.cssText='color:#00ff55;font-size:13px;letter-spacing:2px;margin-bottom:8px;font-family:Courier New,monospace;';
+      missionTitle.textContent='MISSIONS';
+      evScreen.appendChild(missionTitle);
+
+      var mGrid = document.createElement('div');
+      mGrid.id = 'evMissionGrid';
+      mGrid.style.cssText='display:grid;grid-template-columns:repeat(2,1fr);gap:10px;overflow-y:auto;max-height:calc(100vh - 380px);';
+      evScreen.appendChild(mGrid);
+
+      document.body.appendChild(evScreen);
+
+      document.getElementById('closeEvent').addEventListener('click',function(){ showScreen('lobby'); });
+    }
+
+    function renderEventScreen(){
+      checkMissions();
+      var pEl = document.getElementById('evPieces'); if(pEl) pEl.textContent=EVT.pieces;
+      var pb = document.getElementById('evProgBar'); if(pb) pb.style.width=Math.min(100,EVT.pieces/12*100)+'%';
+
+      var mGrid = document.getElementById('evMissionGrid');
+      if(!mGrid) return;
+      mGrid.innerHTML='';
+      EVT.missions.forEach(function(m){
+        var progress = m.type==='kills' ? Math.min(m.target,EVT.totalKills) : Math.min(m.target,Math.floor(EVT.totalPlayMinutes));
+        var card = document.createElement('div');
+        card.className='skin-card'+(m.done?' owned':'');
+        card.style.borderColor = m.done?'#00ff55':'#ffd70033';
+        card.style.background = m.done?'rgba(0,255,85,0.08)':'rgba(255,215,0,0.03)';
+        var icon = m.type==='kills'?'⚔':'⏱';
+        card.innerHTML='<div style="font-size:26px;margin-bottom:4px;">'+icon+'</div>'+
+          '<div class="skin-name" style="color:'+(m.done?'#00ff55':'#ffd700')+'">'+m.label+'</div>'+
+          '<div style="font-size:10px;color:#888;margin:4px 0;">'+Math.floor(progress)+' / '+m.target+'</div>'+
+          '<div style="width:100%;height:5px;background:#222;border-radius:3px;overflow:hidden;margin:3px 0;">'+
+          '<div style="height:100%;background:'+(m.done?'#00ff55':'#ffd700')+';width:'+Math.min(100,progress/m.target*100)+'%;border-radius:3px;"></div></div>'+
+          '<div class="skin-cost" style="color:'+(m.done?'#00ff55':'#ffd700')+';font-size:10px;">'+(m.done?'✅ +'+m.reward+' 🧩':'Reward: +'+m.reward+' 🧩')+'</div>';
+        mGrid.appendChild(card);
+      });
+    }
+
+    // Inject EVENT button in lobby and build screen
+    setTimeout(function(){
+      var lobby = document.getElementById('lobby');
+      if(!lobby) return;
+      // Build the screen
+      buildEventScreen();
+      // Add button
+      var evBtn = document.createElement('div');
+      evBtn.className='btn';
+      evBtn.style.cssText='position:absolute;bottom:80px;left:18px;width:150px;margin:0;z-index:2;background:rgba(255,215,0,0.12);backdrop-filter:blur(4px);border-color:#ffd70088;color:#ffd700;';
+      evBtn.textContent='⚔ EVENT';
+      evBtn.addEventListener('click',function(){ renderEventScreen(); showScreen('eventScreen'); });
+      lobby.appendChild(evBtn);
+    }, 400);
+
+    // ═══════════════════════════════════════
+    // PATCH: Make waterfalls human-made (concrete/stone structure)
+    // Move away from river
+    // ═══════════════════════════════════════
+    function waitDrawMap(cb){
+      if(typeof window.drawMap!=='undefined') cb();
+      else setTimeout(function(){waitDrawMap(cb);},100);
+    }
+    waitDrawMap(function(){
+      var _prevDM = window.drawMap;
+
+      // New waterfall locations — away from rivers
+      var MANMADE_FALLS = [
+        {x:400, y:400},
+        {x:2600, y:500},
+        {x:3500, y:2000},
+        {x:1200, y:3200},
+      ];
+
+      function drawManmadeWaterfall(c, wf){
+        c.save(); c.translate(wf.x, wf.y);
+        var t = Date.now()/1000;
+
+        // Concrete base structure
+        var bg = c.createLinearGradient(-30,-50,30,20);
+        bg.addColorStop(0,'#7a7a7a'); bg.addColorStop(1,'#4a4a4a');
+        c.fillStyle = bg;
+        // Main wall
+        c.beginPath(); c.roundRect(-35,-50,70,70,4); c.fill();
+        // Wall border
+        c.strokeStyle='#3a3a3a'; c.lineWidth=2;
+        c.beginPath(); c.roundRect(-35,-50,70,70,4); c.stroke();
+
+        // Brick/stone pattern
+        c.strokeStyle='rgba(0,0,0,0.15)'; c.lineWidth=1;
+        for(var row=0;row<5;row++){
+          var ry = -48 + row*14;
+          c.beginPath(); c.moveTo(-34,ry); c.lineTo(34,ry); c.stroke();
+          var offset = row%2===0 ? 0 : 12;
+          for(var col=-34+offset;col<34;col+=24){
+            c.beginPath(); c.moveTo(col,ry); c.lineTo(col,ry+14); c.stroke();
+          }
+        }
+
+        // Water pipe at top
+        c.fillStyle='#5a5a5a';
+        c.beginPath(); c.roundRect(-20,-55,40,8,3); c.fill();
+        c.strokeStyle='#3a3a3a'; c.lineWidth=1.5;
+        c.beginPath(); c.roundRect(-20,-55,40,8,3); c.stroke();
+
+        // Water spouts (3 pipes)
+        [-12, 0, 12].forEach(function(px){
+          c.fillStyle='#4a4a4a';
+          c.beginPath(); c.roundRect(px-3,-48,6,6,1); c.fill();
+
+          // Animated water streams
+          var flowOff = (t*100)%20;
+          c.strokeStyle='rgba(80,180,255,0.8)'; c.lineWidth=3;
+          c.setLineDash([6,4]); c.lineDashOffset=-flowOff;
+          c.beginPath(); c.moveTo(px,-42); c.lineTo(px+2,18); c.stroke();
+          c.setLineDash([]); c.lineDashOffset=0;
+
+          // Water shine
+          c.fillStyle='rgba(180,240,255,0.3)';
+          c.beginPath(); c.ellipse(px+1,-10,2,18,0,0,Math.PI*2); c.fill();
+        });
+
+        // Collection pool at bottom (rectangular)
+        c.fillStyle='rgba(60,160,240,0.5)';
+        c.beginPath(); c.roundRect(-30,18,60,14,3); c.fill();
+        c.strokeStyle='#5a5a5a'; c.lineWidth=2;
+        c.beginPath(); c.roundRect(-30,18,60,14,3); c.stroke();
+
+        // Splash effects
+        c.fillStyle='rgba(200,240,255,0.5)';
+        for(var si=0;si<6;si++){
+          var sa = si/6*Math.PI*2 + t*4;
+          c.beginPath(); c.arc(Math.cos(sa)*20, 22+Math.sin(sa)*3, 1.5, 0, Math.PI*2); c.fill();
+        }
+
+        // Overflow drain
+        c.fillStyle='#3a3a3a';
+        c.beginPath(); c.roundRect(20,28,12,6,2); c.fill();
+
+        // Label
+        c.fillStyle='rgba(200,220,255,0.7)'; c.font='bold 7px Courier New'; c.textAlign='center';
+        c.fillText('WATER FEATURE',0,42);
+
+        c.restore();
+      }
+
+      window.drawMap = function(){
+        _prevDM();
+        // Override: draw man-made waterfalls instead
+        MANMADE_FALLS.forEach(function(wf){ drawManmadeWaterfall(cx, wf); });
+      };
+    });
+
+    console.log('[PATCH v4] Farmer skins, Event missions, Man-made waterfalls applied!');
+  });
+})();
+</script>
 </body>
 </html>
