@@ -7091,5 +7091,411 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
   });
 })();
 </script>
+<!-- ========= FIX PATCH v8 ========= -->
+<style>
+  /* FIX: Make store scrollable on touch devices */
+  #store{
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    -webkit-overflow-scrolling:touch !important;
+    touch-action:pan-y !important;
+    justify-content:flex-start !important;
+    align-items:stretch !important;
+    padding-bottom:30px !important;
+  }
+  #store .skin-grid{
+    overflow:visible !important;
+    max-height:none !important;
+    touch-action:pan-y !important;
+  }
+  #store .store-top{
+    position:sticky;
+    top:0;
+    background:#060d06;
+    z-index:5;
+    padding:6px 0 8px;
+  }
+  #store *{ touch-action:pan-y !important; }
+</style>
+<script>
+(function(){
+  // ===== FIX 1 (v9): Eliminate the halo/box around the plane =====
+  // The plane PNG itself is transparent, but its edges are anti-aliased
+  // semi-transparent whitish/greenish pixels. The game also paints a
+  // green canvas shadowBlur around the plane (the "obscure background"
+  // the user sees as a dark/glowing rectangle around the plane).
+  // We do two things:
+  //   (a) Re-clean droneImg / __planeImg into hard-edged transparent canvases.
+  //   (b) Re-override _drawDroneScreen and drawDrone so NO shadow/glow is set.
+
+  function cleanImageToCanvas(img){
+    var oc=document.createElement('canvas');
+    oc.width=img.naturalWidth; oc.height=img.naturalHeight;
+    var c=oc.getContext('2d');
+    c.drawImage(img,0,0);
+    var id=c.getImageData(0,0,oc.width,oc.height);
+    var d=id.data;
+    for(var i=0;i<d.length;i+=4){
+      var r=d[i],g=d[i+1],b=d[i+2],a=d[i+3];
+      // Any low-alpha edge pixel → fully transparent (kills the soft halo)
+      if(a<160){ d[i+3]=0; continue; }
+      // Any whitish pixel → transparent (kills white bg leftovers)
+      if(r>210&&g>210&&b>210){ d[i+3]=0; continue; }
+      // Greenish fringe → transparent
+      if(g>r+25 && g>b+15 && g>110 && r<210 && b<210){ d[i+3]=0; continue; }
+      // Force fully opaque for everything else (no soft alpha → no shadow halo)
+      d[i+3]=255;
+    }
+    c.putImageData(id,0,0);
+    return oc;
+  }
+
+  function tryClean(){
+    var ok=false;
+    try{
+      if(typeof droneImg!=='undefined' && droneImg.complete && droneImg.naturalWidth){
+        window.droneCanvas = cleanImageToCanvas(droneImg);
+        ok=true;
+      }
+    }catch(e){ console.warn('[FIX v9] droneImg clean failed',e); }
+    try{
+      if(typeof __planeImg!=='undefined' && __planeImg.complete && __planeImg.naturalWidth){
+        window.__planeCanvas = cleanImageToCanvas(__planeImg);
+        ok=true;
+      }
+    }catch(e){}
+    if(!ok) setTimeout(tryClean,150);
+    else console.log('[FIX v9] Plane images cleaned (hard-edge alpha).');
+  }
+  tryClean();
+
+  // (b) Re-override draw functions to remove ALL shadow/glow around the plane.
+  function installDrawOverrides(){
+    if(typeof window._drawDroneScreen==='undefined' || typeof cx==='undefined'){
+      setTimeout(installDrawOverrides,150); return;
+    }
+    window._drawDroneScreen = function(){
+      if(typeof G==='undefined') return;
+      if(!G.droneWX && G.droneWX!==0) return;
+      var sx = G.droneWX - G.camX + W/2;
+      var sy = G.droneWY - G.camY + H/2;
+      if(sx < -300 || sx > W+300 || sy < -300 || sy > H+300) return;
+      var src = window.droneCanvas
+             || (typeof droneImg!=='undefined' && droneImg.complete && droneImg.naturalWidth>0 ? droneImg : null);
+      if(!src) return;
+      cx.save();
+      cx.shadowColor='transparent'; cx.shadowBlur=0; // KILL halo
+      cx.globalAlpha=1;
+      cx.translate(sx, sy);
+      cx.rotate(-0.08);
+      cx.drawImage(src, -100, -75, 200, 150);
+      cx.restore();
+
+      if(!G.playerDropped){
+        cx.save(); cx.resetTransform();
+        cx.shadowColor='transparent'; cx.shadowBlur=0;
+        cx.strokeStyle='rgba(200,200,200,0.5)'; cx.lineWidth=2; cx.setLineDash([4,4]);
+        cx.beginPath(); cx.moveTo(sx, sy+70); cx.lineTo(sx, sy+160); cx.stroke();
+        cx.setLineDash([]);
+        cx.fillStyle='rgba(255,255,255,0.85)'; cx.font='bold 12px Courier New'; cx.textAlign='center';
+        cx.fillText('TAP TO LAND', sx, sy+180);
+        cx.restore();
+      }
+    };
+    window.drawDroneOverlay = function(){};
+    // Re-wrap drawDrone (gameplay plane) to ensure no shadow
+    if(typeof window.drawDrone==='function'){
+      var prev = window.drawDrone;
+      window.drawDrone = function(c2,x,y,angle,scale){
+        var src = window.__planeCanvas || window.droneCanvas
+               || (typeof __planeImg!=='undefined' && __planeImg.complete ? __planeImg : null)
+               || (typeof droneImg!=='undefined' && droneImg.complete ? droneImg : null);
+        if(!src){ try{ prev.apply(this,arguments); }catch(e){} return; }
+        c2.save();
+        c2.shadowColor='transparent'; c2.shadowBlur=0;
+        c2.translate(x,y); c2.rotate(angle||0);
+        var s=(scale||1)*64;
+        c2.drawImage(src, -s, -s*0.7, s*2, s*1.4);
+        c2.restore();
+      };
+    }
+    console.log('[FIX v9] Drone draw overrides installed (no shadow/glow).');
+  }
+  installDrawOverrides();
+
+  // ===== FIX 2: Ensure store can scroll on mobile =====
+  document.addEventListener('DOMContentLoaded', function(){
+    var store=document.getElementById('store');
+    if(!store) return;
+    ['touchstart','touchmove','touchend','wheel'].forEach(function(ev){
+      store.addEventListener(ev, function(e){ e.stopPropagation(); }, {passive:true});
+    });
+  });
+
+  // ===== FIX 3 (v10): Make plane fly toward a house cluster, and the
+  // parachute land right next to the houses. =====
+  // Strategy:
+  //   - When drone_intro starts, pick a PLACE (house cluster) as target.
+  //   - Steer the drone's Y toward the target's Y while it flies.
+  //   - When drone is close to target X (or reaches it), auto-drop the
+  //     player and set the parachute landing point to the target's
+  //     position with a small offset (so player lands right outside the
+  //     houses, not on top of one).
+  function installLandingNearHouses(){
+    if(typeof window.updateDroneIntro!=='function' || typeof PLACES==='undefined'
+       || typeof G==='undefined' || typeof MAP==='undefined'){
+      setTimeout(installLandingNearHouses, 200); return;
+    }
+
+    function pickTarget(){
+      // Pick a cluster reasonably in-bounds (not at extreme map edges so the
+      // drone has time to approach). Randomize each match.
+      var candidates = PLACES.filter(function(p){
+        return p.x > 600 && p.x < MAP - 600
+            && p.y > 600 && p.y < MAP - 600;
+      });
+      if(!candidates.length) candidates = PLACES.slice();
+      return candidates[Math.floor(Math.random()*candidates.length)];
+    }
+
+    var prevUpdate = window.updateDroneIntro;
+    window.updateDroneIntro = function(){
+      // Lazy-init target for this match
+      if(G.phase==='drone_intro' && !G._houseTarget){
+        G._houseTarget = pickTarget();
+        // Land position with small offset away from cluster center so we
+        // don't drop ON a house. Offset roughly 90px to the side.
+        var ang = Math.random()*Math.PI*2;
+        G._houseLandX = G._houseTarget.x + Math.cos(ang)*90;
+        G._houseLandY = G._houseTarget.y + Math.sin(ang)*90;
+        // Initial drone Y: start ~600 above target so it descends visually
+        G.droneWY = G._houseTarget.y - 600;
+        // Restart drone X from far left (in case it was already moving)
+        if(G.droneWX > 0) G.droneWX = -300;
+        console.log('[FIX v10] Target house cluster: '+G._houseTarget.n
+          +' ('+G._houseTarget.x+','+G._houseTarget.y+')');
+      }
+
+      // Steer drone Y toward target Y while it flies
+      if(G._houseTarget && !G.playerDropped){
+        var targetY = G._houseTarget.y - 200; // hover ~200px above cluster
+        G.droneWY += (targetY - G.droneWY) * 0.04;
+      }
+
+      // Auto-drop when drone X passes target X (so player drops right above)
+      if(G._houseTarget && !G.playerDropped && G.droneWX >= G._houseTarget.x){
+        if(typeof window._tryDrop==='function'){ window._tryDrop(); }
+        else {
+          // inline drop fallback
+          G.playerDropped = true;
+          G.playerFalling = true;
+          G.playerFallT = 0;
+          G.playerDropX = G._houseLandX;
+          G.playerDropStartY = G.droneWY + 80;
+          G.playerDropEndY = G._houseLandY;
+          G.px = G.playerDropX; G.py = G.playerDropStartY;
+          G.camX = G.px; G.camY = G.py;
+          var ov = window._tapLandOverlay || document.getElementById('tapLandOverlay');
+          if(ov) ov.style.display='none';
+        }
+      }
+
+      // Run original logic
+      prevUpdate.apply(this, arguments);
+
+      // Override the drop landing X/Y to land at the house (after _tryDrop set them)
+      if(G.playerFalling && G._houseTarget && !G._landingPatched){
+        G._landingPatched = true;
+        G.playerDropX    = G._houseLandX;
+        G.playerDropEndY = G._houseLandY;
+        G.px             = G.playerDropX;
+      }
+
+      // Reset target when intro phase ends (so next match picks a new house)
+      if(G.phase !== 'drone_intro' && !G.playerFalling && G._houseTarget){
+        G._houseTarget = null;
+        G._landingPatched = false;
+      }
+    };
+    console.log('[FIX v10] Plane + parachute will land near a house cluster.');
+  }
+  installLandingNearHouses();
+
+  // ===== FIX 4 (v11): Tight coupling between PLANE flight path and
+  // PARACHUTE landing location. The plane now visually flies over the
+  // exact house cluster, and the player parachutes straight down to
+  // that same spot.
+  function installPlaneOverLanding(){
+    if(typeof window.updateDroneIntro!=='function' || typeof PLACES==='undefined'
+       || typeof G==='undefined' || typeof MAP==='undefined'){
+      setTimeout(installPlaneOverLanding, 200); return;
+    }
+    var prev = window.updateDroneIntro;
+    window.updateDroneIntro = function(){
+      // Force plane Y to match target Y exactly (plane passes over houses)
+      if(G._houseTarget && !G.playerDropped){
+        var planeY = G._houseTarget.y - 220; // plane altitude above cluster
+        // smoothly approach
+        G.droneWY += (planeY - G.droneWY) * 0.08;
+      }
+      // Land player AT the house cluster center (small random offset)
+      if(G._houseTarget){
+        if(G._houseLandX === undefined || G._houseLandY === undefined){
+          var a = Math.random()*Math.PI*2;
+          G._houseLandX = G._houseTarget.x + Math.cos(a)*60;
+          G._houseLandY = G._houseTarget.y + Math.sin(a)*60;
+        }
+      }
+      prev.apply(this, arguments);
+      // Hard-pin parachute landing to house location every frame while falling
+      if(G.playerFalling && G._houseTarget){
+        G.playerDropX    = G._houseLandX;
+        G.playerDropEndY = G._houseLandY;
+      }
+    };
+    console.log('[FIX v11] Plane flies directly over the house cluster; parachute lands there.');
+  }
+  installPlaneOverLanding();
+
+  // ===== FIX 5 (v12): Keep the PLANE visible in the sky while the
+  // character parachutes down, so the player can see both at once. =====
+  function installPlaneVisibleDuringFall(){
+    if(typeof window.updateDroneIntro!=='function' || typeof G==='undefined'){
+      setTimeout(installPlaneVisibleDuringFall, 200); return;
+    }
+    var prev = window.updateDroneIntro;
+    window.updateDroneIntro = function(){
+      prev.apply(this, arguments);
+      if(G.playerFalling){
+        if(!G._planeDriftInit){
+          G._planeDriftInit = true;
+          G._planeDriftVX = 1.2; // slow drift while player parachutes
+        }
+        G.droneWX += G._planeDriftVX;
+        G.droneWY = G.py - 380;          // keep plane high above player
+        var dx = G.droneWX - G.px;
+        if(dx >  260) G.droneWX = G.px + 260;
+        if(dx < -260) G.droneWX = G.px - 260;
+        G.camY = G.py - 140;             // bias camera up so plane fits
+        G.camX += (G.px - G.camX) * 0.12;
+        G.droneFlightDone = false;        // ensure plane keeps rendering
+      } else {
+        G._planeDriftInit = false;
+      }
+    };
+    console.log('[FIX v12] Plane stays visible in sky while character parachutes.');
+  }
+  installPlaneVisibleDuringFall();
+
+  // ===== FIX 6 (v13): Stronger zone damage on player + enemies fight
+  // and eliminate EACH OTHER (enemy bullets now hurt other enemies). =====
+  function installCombatAndZone(){
+    if(typeof G==='undefined' || typeof G.bullets==='undefined'
+       || typeof zoneActive!=='function' || typeof getZoneR!=='function'
+       || typeof updateBullets!=='function' || typeof updateEnemies!=='function'){
+      setTimeout(installCombatAndZone, 200); return;
+    }
+
+    // --- Replace updateBullets so enemy bullets damage other enemies too ---
+    window.updateBullets = function(){
+      G.bullets = G.bullets.filter(function(b){
+        b.x += b.vx; b.y += b.vy; b.tr += Math.hypot(b.vx, b.vy);
+        if(b.tr > b.range || b.x < 0 || b.x > MAP || b.y < 0 || b.y > MAP) return false;
+
+        if(b.pl){
+          // Player bullet → hits any enemy
+          for(var i=0;i<G.enemies.length;i++){
+            var e = G.enemies[i];
+            if(e.hp<=0 || !e.landed) continue;
+            if(dist(b.x,b.y,e.x,e.y) < 22){
+              var d = b.dmg + (Math.random()*8-4);
+              e.hp -= d; spark(b.x,b.y,'#ff4444',5);
+              if(e.hp<=0){
+                G.gKills++; G.kills++;
+                if(typeof addKill==='function') addKill('YOU \u2192 '+SKINS[e.si].name+'#'+e.id);
+                if(typeof killEnemy==='function') killEnemy(e);
+              }
+              return false;
+            }
+          }
+        } else {
+          // Enemy bullet → hits the PLAYER...
+          if(dist(b.x,b.y,G.px,G.py) < 22){
+            G.hp = Math.max(0, G.hp - b.dmg*0.4);
+            if(typeof setHP==='function') setHP(G.hp);
+            spark(b.x,b.y,'#ffaa00',6);
+            if(G.hp<=0 && typeof endMatch==='function'){ endMatch(false); }
+            return false;
+          }
+          // ...AND now also hits OTHER enemies (friendly fire = battle royale).
+          for(var j=0;j<G.enemies.length;j++){
+            var e2 = G.enemies[j];
+            if(e2.hp<=0 || !e2.landed) continue;
+            // Don't let a bullet hit the enemy who fired it (approximate by
+            // skipping enemies very close to bullet spawn — we don't track
+            // shooter id, so skip enemies within 24px to avoid self-hit at spawn).
+            if(b.tr < 30) continue;
+            if(dist(b.x,b.y,e2.x,e2.y) < 22){
+              var dd = b.dmg + (Math.random()*8-4);
+              e2.hp -= dd; spark(b.x,b.y,'#ff8844',5);
+              if(e2.hp<=0){
+                if(typeof addKill==='function')
+                  addKill(SKINS[e2.si].name+'#'+e2.id+' eliminated');
+                if(typeof killEnemy==='function') killEnemy(e2);
+              }
+              return false;
+            }
+          }
+        }
+        return true;
+      });
+    };
+
+    // --- Stronger zone damage on the player ---
+    // Original: G.hp -= 0.03 per frame (very slow). Bump to 0.35.
+    var prevUpdate = window.update || null;
+    // We patch by wrapping updateEnemies which runs every frame; cheaper
+    // alternative: hook into existing zone check by overriding it via a
+    // per-frame hook. Easiest: re-apply extra damage each frame via rAF.
+    (function tickZoneDamage(){
+      try {
+        if(G.phase==='game' && zoneActive() && G.hp>0){
+          var zr = getZoneR();
+          if(dist(G.px,G.py,G.zone.x,G.zone.y) > zr){
+            // Extra damage on top of the original 0.03 — total ~0.4/frame
+            G.hp = Math.max(0, G.hp - 0.35);
+            if(typeof setHP==='function') setHP(G.hp);
+            if(G.hp<=0 && typeof endMatch==='function') endMatch(false);
+          }
+        }
+      } catch(e){}
+      requestAnimationFrame(tickZoneDamage);
+    })();
+
+    // --- Make enemies in the zone take more damage too (faster eliminations) ---
+    var prevUE = window.updateEnemies;
+    window.updateEnemies = function(){
+      prevUE.apply(this, arguments);
+      if(!zoneActive()) return;
+      var zr = getZoneR();
+      G.enemies.forEach(function(e){
+        if(e.hp<=0) return;
+        if(dist(e.x,e.y,G.zone.x,G.zone.y) > zr){
+          e.hp -= 0.25; // extra zone damage on top of base 0.12
+          if(e.hp<=0 && typeof killEnemy==='function'){
+            if(typeof addKill==='function')
+              addKill(SKINS[e.si].name+'#'+e.id+' \u2620 zone');
+            killEnemy(e);
+          }
+        }
+      });
+    };
+
+    console.log('[FIX v13] Zone damages player faster; enemies now kill each other.');
+  }
+  installCombatAndZone();
+})();
+</script>
+
 </body>
 </html>
