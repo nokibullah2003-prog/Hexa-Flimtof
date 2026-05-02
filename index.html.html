@@ -7498,352 +7498,219 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
 </script>
 
 <!-- ============================================================
-     v14 PATCH — Equipped-skin emotes (game + lobby) and consistent
-     hat/headwear rendering using the unified _drawCharDir pipeline.
+     v15 PATCH — Keep ORIGINAL emote animations exactly as-is.
+     Only overlay the equipped skin's HEAD (hair + hat) on top of
+     the hardcoded emote head, so new characters' hats render
+     properly in both game and lobby. Animation style untouched.
      ============================================================ -->
 <script>
 (function(){
+  // Offscreen head cache: { skinIndex: { canvas, sx, sy, sw, sh } }
+  // We render _drawCharDir at (cx, cy) on a small canvas, then crop the
+  // head region in char-local coords y in [HEAD_Y_TOP, HEAD_Y_BOT].
+  var HEAD_Y_TOP = -46;   // include tall hats
+  var HEAD_Y_BOT = -10;   // just above neck
+  var HEAD_X_HALF = 22;   // wide enough for hat brims
+  var headCache = {};
+
+  function buildHead(skinIndex){
+    if(headCache[skinIndex]) return headCache[skinIndex];
+    var sk = SKINS[skinIndex] || SKINS[0];
+    // Render at scale 4 for crisp overlay
+    var SC = 4;
+    var w = HEAD_X_HALF * 2 * SC;
+    var h = (HEAD_Y_BOT - HEAD_Y_TOP) * SC;
+    var off = document.createElement('canvas');
+    off.width = w; off.height = h;
+    var oc = off.getContext('2d');
+    oc.save();
+    // Place char-local (0,0) so that head region maps onto canvas
+    oc.translate(w/2, -HEAD_Y_TOP * SC);
+    oc.scale(SC, SC);
+    _drawCharDir(oc, 'front', sk, 0, 0);
+    oc.restore();
+    headCache[skinIndex] = {
+      canvas: off, scale: SC,
+      worldH: (HEAD_Y_BOT - HEAD_Y_TOP),
+      worldW: HEAD_X_HALF * 2,
+      offsetY: HEAD_Y_TOP   // top of crop in char-local Y
+    };
+    return headCache[skinIndex];
+  }
+
+  // Draw the cached head onto ctx at char-local (0,0) assuming caller has
+  // already applied translate(headCenterX, headCenterY) and scale(sc).
+  // We draw it so that char-local Y range [HEAD_Y_TOP..HEAD_Y_BOT] maps
+  // around the current origin (origin = head-region top? no — we anchor
+  // by offset). Simpler: caller passes in headCenterX/Y in char-local
+  // coords and we do the placement ourselves.
+  function drawEquippedHead(ctx, headCenterX, headCenterY){
+    if(typeof G === 'undefined' || typeof SKINS === 'undefined' || typeof _drawCharDir !== 'function') return;
+    var idx = G.skin || 0;
+    var hc = buildHead(idx);
+    // The offscreen was rendered with char-local (0,0) at offset within
+    // the canvas. To draw the head on the live ctx so that char-local
+    // Y range [HEAD_Y_TOP..HEAD_Y_BOT] aligns with the original head,
+    // we draw the offscreen scaled down by 1/SC and translated so the
+    // char-local origin lands at (0,0) of current ctx (char-local space).
+    // headCenterX/Y let us shift if needed.
+    ctx.save();
+    var s = 1 / hc.scale;
+    // Top-left of offscreen, in char-local coords, sits at:
+    //   x = -HEAD_X_HALF + headCenterX
+    //   y = HEAD_Y_TOP   + headCenterY
+    ctx.drawImage(hc.canvas,
+      -HEAD_X_HALF + headCenterX,
+      HEAD_Y_TOP   + headCenterY,
+      hc.canvas.width * s,
+      hc.canvas.height * s);
+    ctx.restore();
+  }
+
   function ready(){
     return typeof G !== 'undefined' && typeof SKINS !== 'undefined'
-      && typeof _drawCharDir === 'function' && typeof window.doEmote === 'function';
+      && typeof _drawCharDir === 'function';
   }
   function waitReady(cb){ if(ready()) cb(); else setTimeout(function(){waitReady(cb);},120); }
 
-  waitReady(function(){
-    var EMOTE_DUR = { laugh:3000, sit:4000, hi:2500 };
-    var active = null, started = 0;
-
-    // Replace global doEmote so the equipped-skin version takes over.
-    // The original (closure) doEmote is shadowed; the closure's render hook
-    // sees emoteActive===null and does nothing on emote frames.
-    var _origDoEmote = window.doEmote;
-    window.doEmote = function(type){
-      if(typeof G==='undefined' || G.phase!=='game') return;
-      if(!EMOTE_DUR[type]) return;
-      // hide emote wheel
-      var wheel = document.getElementById('emoteWheel');
-      if(wheel) wheel.style.display='none';
-      active = type; started = Date.now();
-      G._emoteHidePlayer = true;
-    };
-
-    // Helper: draw the equipped character with given transform + bob/tilt
-    function drawEquipped(c, sx, sy, opts){
-      opts = opts || {};
-      var sk = SKINS[G.skin] || SKINS[0];
-      var sc = opts.scale || 1.35;
-      c.save();
-      c.translate(sx + (opts.dx||0), sy + (opts.dy||0) + 22);
-      if(opts.rot) c.rotate(opts.rot);
-      c.scale(sc, sc);
-      // shadow
-      c.save(); c.scale(1,0.25);
-      c.beginPath(); c.ellipse(0,52,14,6,0,0,Math.PI*2);
-      c.fillStyle='rgba(0,0,0,0.35)'; c.fill(); c.restore();
-      _drawCharDir(c, opts.dir||'front', sk, 0, opts.bob||0);
-      c.restore();
+  // Invalidate cache when skin changes
+  var lastSkin = -1;
+  setInterval(function(){
+    if(typeof G==='undefined') return;
+    if(G.skin !== lastSkin){
+      lastSkin = G.skin;
+      headCache = {};
     }
+  }, 300);
 
-    // Hook AFTER the inner render override — wrap once more.
-    function installRender(){
-      if(typeof window.render !== 'function'){ setTimeout(installRender,100); return; }
-      var _inner = window.render;
-      window.render = function(){
-        if(active) G._emoteHidePlayer = true;
-        _inner();
-        if(!active) return;
-        if(G.phase !== 'game'){ active = null; G._emoteHidePlayer = false; return; }
-        var elapsed = Date.now() - started;
-        var dur = EMOTE_DUR[active] || 3000;
-        if(elapsed >= dur){ active = null; G._emoteHidePlayer = false; return; }
-        var psx = G.px - G.camX + window.innerWidth/2;
-        var psy = G.py - G.camY + window.innerHeight/2;
-        var c = document.getElementById('gc').getContext('2d');
-        if(active==='laugh') renderLaugh(c, psx, psy, elapsed);
-        else if(active==='sit') renderSit(c, psx, psy, elapsed);
-        else if(active==='hi')  renderHi(c, psx, psy, elapsed);
+  waitReady(function(){
+    // ─── Wrap render() to overlay head AFTER original emote draws ───
+    // Original emote functions are defined in a closure (we can't access
+    // them directly), but they draw onto canvas 'gc' with a known
+    // transform: translate(psx + shake, psy + shake + 22), rotate(tilt),
+    // scale(1.35). After they execute, we re-apply a similar transform
+    // and stamp the equipped head on top of their hardcoded head.
+    //
+    // We do this by wrapping window.render and reading the same emote
+    // state the original uses. Since we can't read closure state, we
+    // hook into the canvas: after each render frame, if an emote bubble
+    // text "HA HA HA!" or chair element exists, we know which emote is
+    // playing and where the player is.
+    if(typeof window.render !== 'function'){ return; }
+    var _origRender = window.render;
+    var emoteStartTimes = { laugh:0, sit:0, hi:0 };
+    var lastEmote = null;
+
+    // Detect emote start by patching doEmote
+    if(typeof window.doEmote === 'function'){
+      var _origDo = window.doEmote;
+      window.doEmote = function(type){
+        emoteStartTimes[type] = Date.now();
+        lastEmote = type;
+        return _origDo.apply(this, arguments);
       };
     }
-    installRender();
 
-    // ── LAUGH: equipped char shaking + HAHA bubble + floating emojis ──
-    function renderLaugh(c, sx, sy, elapsed){
-      var t = elapsed/1000;
-      var shakeX = Math.sin(t*18)*7;
-      var shakeY = Math.abs(Math.sin(t*11))*-10;
-      var tilt   = Math.sin(t*14)*0.18;
-      var bob    = Math.abs(Math.sin(t*11))*5;
-      drawEquipped(c, sx, sy, {dx:shakeX, dy:shakeY, rot:tilt, bob:bob, dir:'front'});
+    var EMOTE_DUR = { laugh:3000, sit:4000, hi:2500 };
 
-      // Speech bubble
-      var bx = sx + 28, by = sy - 80;
-      c.save();
-      c.fillStyle='rgba(255,255,255,0.93)';
-      c.beginPath(); c.roundRect(bx-4, by-26, 80, 34, 12); c.fill();
-      c.beginPath(); c.moveTo(bx+4,by+8); c.lineTo(bx-12,by+22); c.lineTo(bx+18,by+8); c.closePath(); c.fill();
-      c.strokeStyle='rgba(0,0,0,0.1)'; c.lineWidth=1.5;
-      c.beginPath(); c.roundRect(bx-4,by-26,80,34,12); c.stroke();
-      var fs = 14 + Math.sin(t*9)*3;
-      c.font = 'bold '+fs+'px Courier New'; c.textAlign='center'; c.fillStyle='#111';
-      c.fillText('HA HA HA!', bx+36, by-6);
-      // floating emojis
-      for(var i=0;i<5;i++){
-        var phase = (elapsed/360+i/5)%1;
-        var fx = sx + Math.sin(elapsed/420+i*1.7)*32 + i*9 - 18;
-        var fy = sy - 40 - phase*110;
-        c.globalAlpha = 1-phase;
-        c.font='16px serif'; c.textAlign='center';
-        c.fillText(i%2===0?'😂':'🤣', fx, fy);
-      }
-      c.globalAlpha=1;
-      c.restore();
-    }
+    window.render = function(){
+      _origRender();
+      if(!lastEmote) return;
+      if(typeof G === 'undefined' || G.phase !== 'game') return;
+      var elapsed = Date.now() - emoteStartTimes[lastEmote];
+      if(elapsed > (EMOTE_DUR[lastEmote] + 200)){ lastEmote = null; return; }
 
-    // ── SIT: throne + equipped char seated + crown + sparkles ──
-    function renderSit(c, sx, sy, elapsed){
-      var t = elapsed/1000;
-      // Draw throne first (under character)
-      c.save();
-      c.translate(sx, sy + 22);
+      var psx = G.px - G.camX + window.innerWidth/2;
+      var psy = G.py - G.camY + window.innerHeight/2;
+      var c = document.getElementById('gc').getContext('2d');
+      var t = elapsed / 1000;
       var sc = 1.35;
-      c.scale(sc, sc);
-      // chair shadow
-      c.save(); c.scale(1,0.2);
-      c.beginPath(); c.ellipse(0,54,22,10,0,0,Math.PI*2);
-      c.fillStyle='rgba(0,0,0,0.4)'; c.fill(); c.restore();
-      // legs
-      c.fillStyle='#b8860b';
-      c.beginPath(); c.roundRect(-20,26,5,28,2); c.fill();
-      c.beginPath(); c.roundRect(15,26,5,28,2); c.fill();
-      c.fillStyle='#daa520';
-      c.beginPath(); c.roundRect(-18,28,4,26,1); c.fill();
-      c.beginPath(); c.roundRect(14,28,4,26,1); c.fill();
-      // back rest (behind character)
-      var cg = c.createLinearGradient(-18,-20,18,20);
-      cg.addColorStop(0,'#ffd700'); cg.addColorStop(0.6,'#daa520'); cg.addColorStop(1,'#996515');
-      c.fillStyle=cg;
-      c.beginPath(); c.roundRect(-18,-22,36,44,5); c.fill();
-      c.fillStyle='rgba(255,240,150,0.3)';
-      c.beginPath(); c.roundRect(-12,-18,24,36,4); c.fill();
-      c.strokeStyle='#ffe060'; c.lineWidth=1.5;
-      c.beginPath(); c.moveTo(0,-14); c.lineTo(8,-6); c.lineTo(0,2); c.lineTo(-8,-6); c.closePath(); c.stroke();
-      // crown finials
-      c.fillStyle='#ffd700';
-      c.beginPath(); c.arc(-18,-22,4,0,Math.PI*2); c.fill();
-      c.beginPath(); c.arc(18,-22,4,0,Math.PI*2); c.fill();
-      c.restore();
 
-      // Equipped character drawn smaller and shifted up to "sit" on the chair
-      drawEquipped(c, sx, sy-6, {scale:1.15, dir:'front', bob:0});
-
-      // Seat cushion + arm rests OVER the character's lap
       c.save();
-      c.translate(sx, sy + 22);
-      c.scale(1.35, 1.35);
-      var cg2 = c.createLinearGradient(-18,20,18,30);
-      cg2.addColorStop(0,'#ffd700'); cg2.addColorStop(0.5,'#ffc200'); cg2.addColorStop(1,'#b8860b');
-      c.fillStyle=cg2;
-      c.beginPath(); c.roundRect(-20,20,40,12,4); c.fill();
-      c.strokeStyle='#daa520'; c.lineWidth=1.5;
-      c.beginPath(); c.roundRect(-20,20,40,12,4); c.stroke();
-      // arm rests
-      var cg3 = c.createLinearGradient(-22,12,22,20);
-      cg3.addColorStop(0,'#ffd700'); cg3.addColorStop(1,'#b8860b');
-      c.fillStyle=cg3;
-      c.beginPath(); c.roundRect(-26,10,10,10,4); c.fill();
-      c.beginPath(); c.roundRect(16,10,10,10,4); c.fill();
-      c.fillStyle='#b8860b';
-      c.beginPath(); c.roundRect(-24,18,6,12,2); c.fill();
-      c.beginPath(); c.roundRect(18,18,6,12,2); c.fill();
-      c.restore();
-
-      // Crown above head
-      var crownY = sy - 35*1.35 - 30 + Math.sin(t*2.5)*6;
-      c.save();
-      c.font='28px serif'; c.textAlign='center'; c.fillStyle='#ffd700';
-      c.fillText('👑', sx, crownY);
-      c.font='bold 12px Courier New';
-      c.shadowColor='#ffd700'; c.shadowBlur=14;
-      c.fillText('Hexa Flimtof', sx, crownY - 22 + Math.sin(t*1.5)*4);
-      c.shadowBlur=0;
-      // sparkle orbit
-      for(var i=0;i<8;i++){
-        var ang=(t*1.3+i/8*Math.PI*2);
-        var sr=56+Math.sin(t*3+i)*8;
-        var spx=sx+Math.cos(ang)*sr;
-        var spy=sy+12+Math.sin(ang)*sr*0.35;
-        c.globalAlpha=0.55+Math.sin(t*4+i)*0.4;
-        c.fillStyle='#ffd700';
-        c.beginPath(); c.arc(spx,spy,2.5,0,Math.PI*2); c.fill();
+      if(lastEmote === 'laugh'){
+        // Same transform as original _drawLaughEmote
+        var shakeX = Math.sin(t*18)*7;
+        var shakeY = Math.abs(Math.sin(t*11))*-10;
+        var tilt   = Math.sin(t*14)*0.18;
+        var bendFwd = Math.abs(Math.sin(t*10))*8;
+        c.translate(psx + shakeX, psy + shakeY + 22);
+        c.rotate(tilt);
+        c.scale(sc, sc);
+        // Original head center in char-local: (0, -27 + bendFwd*0.4)
+        drawEquippedHead(c, 0, -27 + bendFwd*0.4);
+      } else if(lastEmote === 'sit'){
+        // Same transform as original _drawSitEmote
+        c.translate(psx, psy + 22);
+        c.scale(sc, sc);
+        // Original head center in char-local: (0, -26)
+        drawEquippedHead(c, 0, -26);
+      } else if(lastEmote === 'hi'){
+        // Original HI doesn't redraw the body — the normal player render
+        // is still visible (and already shows the equipped skin/hat),
+        // so we skip the overlay for HI.
       }
-      c.globalAlpha=1;
       c.restore();
+    };
+
+    // ─── Lobby: overlay equipped head on lobby emotes ───
+    // The lobby emote functions live in a closure too. We patch by
+    // hooking into the lobby canvas after each emote frame draws.
+    // Easiest: poll for emote button clicks via wrapping startLobbyEmote
+    // if it exists, then attach a post-frame draw.
+    var lobbyEmote = null;
+    var lobbyStart = 0;
+    var LOBBY_DUR = { laugh:4000, sit:5000, hi:4000 };
+
+    function findLobbyButtons(){
+      var ctn = document.getElementById('lobbyEmotes');
+      if(!ctn) return null;
+      var btns = ctn.querySelectorAll('.btn');
+      if(btns.length < 3) return null;
+      return { laugh: btns[0], sit: btns[1], hi: btns[2] };
     }
-
-    // ── HI: equipped char standing + waving arm overlay + HI bubble ──
-    function renderHi(c, sx, sy, elapsed){
-      // Don't hide normal player — character stays visible naturally.
-      G._emoteHidePlayer = false;
-      var t = elapsed/1000;
-      // Wave arm overlay
-      c.save();
-      var armBaseX = sx + 14, armBaseY = sy - 4;
-      var waveAng = -Math.PI/2 + Math.sin(t*7)*0.9;
-      var armLen  = 30;
-      var hx = armBaseX + Math.cos(waveAng)*armLen;
-      var hy = armBaseY + Math.sin(waveAng)*armLen*0.7;
-      c.strokeStyle='#c8956a'; c.lineWidth=5; c.lineCap='round';
-      c.beginPath(); c.moveTo(armBaseX, armBaseY); c.lineTo(hx, hy); c.stroke();
-      c.fillStyle='#c8956a';
-      c.shadowColor='#ffd700'; c.shadowBlur=10;
-      c.beginPath(); c.arc(hx, hy, 5, 0, Math.PI*2); c.fill();
-      c.shadowBlur=0;
-      for(var fi=0;fi<3;fi++){
-        var fa = waveAng - 0.4 + fi*0.4;
-        c.strokeStyle='#c8956a'; c.lineWidth=2;
-        c.beginPath(); c.moveTo(hx,hy);
-        c.lineTo(hx+Math.cos(fa)*10, hy+Math.sin(fa)*7);
-        c.stroke();
+    function hookLobby(){
+      var b = findLobbyButtons();
+      if(!b){ setTimeout(hookLobby, 300); return; }
+      function attach(btn, type){
+        btn.addEventListener('click', function(){
+          lobbyEmote = type; lobbyStart = Date.now();
+          requestAnimationFrame(overlayLobby);
+        }, true); // capture phase, runs alongside original handler
       }
-      // HI bubble
-      var bx = sx - 80, by = sy - 75;
-      c.fillStyle='rgba(255,255,255,0.92)';
-      c.beginPath(); c.roundRect(bx,by-22,56,30,10); c.fill();
-      c.strokeStyle='rgba(0,0,0,0.1)'; c.lineWidth=1.5;
-      c.beginPath(); c.roundRect(bx,by-22,56,30,10); c.stroke();
-      c.fillStyle='rgba(255,255,255,0.92)';
-      c.beginPath(); c.moveTo(bx+40,by+8); c.lineTo(bx+55,by+20); c.lineTo(bx+32,by+8); c.closePath(); c.fill();
-      var hiScale = 1 + Math.sin(t*5)*0.08;
-      c.font = 'bold '+Math.round(16*hiScale)+'px Courier New';
-      c.textAlign='center'; c.fillStyle='#222';
-      c.fillText('HI! 👋', bx+28, by-2);
-      // sparkles
-      for(var si=0;si<5;si++){
-        var sp = ((elapsed/250)+si*0.2)%1;
-        var spx = hx + Math.cos(si*1.2)*18*sp;
-        var spy = hy - sp*30;
-        c.globalAlpha = 1-sp;
-        c.fillStyle='#ffd700';
-        c.font='10px serif'; c.textAlign='center';
-        c.fillText('✨', spx, spy);
-      }
-      c.globalAlpha=1;
-      c.restore();
+      attach(b.laugh,'laugh'); attach(b.sit,'sit'); attach(b.hi,'hi');
     }
-
-    // ───── LOBBY EMOTES — same equipped-skin redraw via drawCharSVG ─────
-    // The lobby's existing emote system already calls drawCharSVG when idle,
-    // but during 'laugh'/'sit'/'hi' it draws a hard-coded character. We
-    // intercept the lobby emote buttons to use drawCharSVG (which uses the
-    // equipped skin) plus emote overlays drawn in lobby canvas.
-    function patchLobby(){
+    function overlayLobby(){
+      if(!lobbyEmote) return;
+      var el = Date.now() - lobbyStart;
+      if(el > (LOBBY_DUR[lobbyEmote] + 100)){ lobbyEmote = null; return; }
       var lc = document.getElementById('lobbyChar');
-      var laughBtn, sitBtn, hiBtn;
-      var btns = document.querySelectorAll('#lobbyEmotes .btn');
-      if(!lc || btns.length < 3){ setTimeout(patchLobby, 200); return; }
-      laughBtn = btns[0]; sitBtn = btns[1]; hiBtn = btns[2];
-
-      var lobbyActive = null, lobbyStart = 0;
-      var DUR = { laugh:4000, sit:5000, hi:4000 };
-
-      function start(type){ lobbyActive = type; lobbyStart = Date.now(); animate(); }
-      laughBtn.onclick = function(){ start('laugh'); };
-      sitBtn.onclick   = function(){ start('sit'); };
-      hiBtn.onclick    = function(){ start('hi'); };
-
-      function animate(){
-        if(!lobbyActive) return;
-        var el = Date.now() - lobbyStart;
-        var dur = DUR[lobbyActive] || 3000;
-        if(el >= dur){
-          lobbyActive = null;
-          if(typeof drawCharSVG !== 'undefined') drawCharSVG(lc, G.skin);
-          return;
-        }
-        var ctx = lc.getContext('2d');
-        var w = lc.width, h = lc.height;
-        ctx.clearRect(0,0,w,h);
-        var t = el/1000;
-        var sk = SKINS[G.skin] || SKINS[0];
-        var scale = w / 52;
-
-        ctx.save();
-        if(lobbyActive==='laugh'){
-          var shx = Math.sin(t*18)*5;
-          var tilt = Math.sin(t*14)*0.18;
-          var bob = Math.abs(Math.sin(t*11))*5;
-          ctx.translate(w/2 + shx, h*0.72);
-          ctx.rotate(tilt);
-          ctx.scale(scale, scale);
-          ctx.save(); ctx.scale(1,0.25);
-          ctx.beginPath(); ctx.ellipse(0,52,14,6,0,0,Math.PI*2);
-          ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fill(); ctx.restore();
-          _drawCharDir(ctx, 'front', sk, 0, bob);
-          ctx.restore();
-          // HAHA bubble
-          ctx.save();
-          ctx.fillStyle='rgba(255,255,255,0.93)';
-          ctx.beginPath(); ctx.roundRect(w*0.55, 30, 90, 30, 10); ctx.fill();
-          ctx.font='bold 14px Courier New'; ctx.textAlign='center'; ctx.fillStyle='#111';
-          ctx.fillText('HA HA HA!', w*0.55+45, 50);
-          ctx.restore();
-        } else if(lobbyActive==='sit'){
-          // throne back
-          ctx.translate(w/2, h*0.72);
-          ctx.scale(scale*0.9, scale*0.9);
-          ctx.fillStyle='#b8860b';
-          ctx.beginPath(); ctx.roundRect(-20,26,5,28,2); ctx.fill();
-          ctx.beginPath(); ctx.roundRect(15,26,5,28,2); ctx.fill();
-          var g = ctx.createLinearGradient(-18,-20,18,20);
-          g.addColorStop(0,'#ffd700'); g.addColorStop(1,'#996515');
-          ctx.fillStyle=g;
-          ctx.beginPath(); ctx.roundRect(-18,-22,36,44,5); ctx.fill();
-          // character on top
-          _drawCharDir(ctx, 'front', sk, 0, 0);
-          // seat + arm rests on top of lap
-          var g2 = ctx.createLinearGradient(-18,20,18,30);
-          g2.addColorStop(0,'#ffd700'); g2.addColorStop(1,'#b8860b');
-          ctx.fillStyle=g2;
-          ctx.beginPath(); ctx.roundRect(-20,20,40,12,4); ctx.fill();
-          ctx.fillStyle='#b8860b';
-          ctx.beginPath(); ctx.roundRect(-26,10,10,10,4); ctx.fill();
-          ctx.beginPath(); ctx.roundRect(16,10,10,10,4); ctx.fill();
-          ctx.restore();
-          // crown
-          ctx.save();
-          ctx.font='24px serif'; ctx.textAlign='center'; ctx.fillStyle='#ffd700';
-          ctx.fillText('👑', w/2, h*0.18 + Math.sin(t*2.5)*4);
-          ctx.restore();
-        } else if(lobbyActive==='hi'){
-          ctx.translate(w/2, h*0.72);
-          ctx.scale(scale, scale);
-          ctx.save(); ctx.scale(1,0.25);
-          ctx.beginPath(); ctx.ellipse(0,52,14,6,0,0,Math.PI*2);
-          ctx.fillStyle='rgba(0,0,0,0.35)'; ctx.fill(); ctx.restore();
-          _drawCharDir(ctx, 'front', sk, 0, 0);
-          // wave arm overlay
-          var armAng = -Math.PI/2 + Math.sin(t*7)*0.9;
-          var hx = 14 + Math.cos(armAng)*22;
-          var hy = -8 + Math.sin(armAng)*16;
-          ctx.strokeStyle='#c8956a'; ctx.lineWidth=4; ctx.lineCap='round';
-          ctx.beginPath(); ctx.moveTo(14,-4); ctx.lineTo(hx,hy); ctx.stroke();
-          ctx.fillStyle='#c8956a';
-          ctx.beginPath(); ctx.arc(hx,hy,4,0,Math.PI*2); ctx.fill();
-          ctx.restore();
-          // HI bubble
-          ctx.save();
-          ctx.fillStyle='rgba(255,255,255,0.92)';
-          ctx.beginPath(); ctx.roundRect(w*0.6, 30, 70, 28, 10); ctx.fill();
-          ctx.font='bold 14px Courier New'; ctx.textAlign='center'; ctx.fillStyle='#222';
-          ctx.fillText('HI! 👋', w*0.6+35, 50);
-          ctx.restore();
-        }
-        requestAnimationFrame(animate);
+      if(!lc){ lobbyEmote = null; return; }
+      var ctx = lc.getContext('2d');
+      var w = lc.width, h = lc.height;
+      var t = el / 1000;
+      var lsc = w / 52;
+      ctx.save();
+      if(lobbyEmote === 'laugh'){
+        // Match lobby laugh transform
+        var shakeX = Math.sin(t*18)*5;
+        var tilt   = Math.sin(t*14)*0.18;
+        var bendFwd = Math.abs(Math.sin(t*10))*7;
+        ctx.translate(w/2 + shakeX, h*0.72);
+        ctx.rotate(tilt);
+        ctx.scale(lsc, lsc);
+        drawEquippedHead(ctx, 0, -27 + bendFwd*0.4);
+      } else if(lobbyEmote === 'sit'){
+        ctx.translate(w/2, h*0.72);
+        ctx.scale(lsc, lsc);
+        drawEquippedHead(ctx, 0, -26);
       }
+      // HI lobby already uses _drawCharDir — no overlay needed.
+      ctx.restore();
+      requestAnimationFrame(overlayLobby);
     }
-    patchLobby();
+    hookLobby();
 
-    console.log('[FIX v14] Equipped-skin emotes active in game and lobby.');
+    console.log('[FIX v15] Original emote animations preserved; equipped hat/hair overlay enabled.');
   });
 })();
 </script>
