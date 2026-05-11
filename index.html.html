@@ -19,6 +19,39 @@ body{background:#0a0e0a;font-family:'Courier New',monospace;overflow:hidden;widt
 .title{font-size:clamp(26px,7vw,52px);font-weight:900;color:#00ff55;letter-spacing:4px;text-shadow:0 0 20px #00ff5588;text-align:center;}
 .sub{font-size:11px;color:#336633;letter-spacing:6px;margin:4px 0 24px;}
 .char-box{width:100px;height:130px;border:1.5px solid #00ff5533;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:18px;background:rgba(0,255,85,0.04);}
+/* === LOBBY ENTRY ANIMATION (2D walk-forward) === */
+:root{--power-green:#39FF14;--char-blue:#4a90e2;}
+#lobby{overflow:hidden;}
+#lobbyChar{transform-origin:bottom center;}
+#lobby.entering #lobbyChar{animation:walk-forward-2d 2.5s ease-out forwards, lobby-aura-glow 2s 2s infinite alternate;}
+
+#lobbyShadow{position:absolute;left:50%;bottom:0;width:140px;height:22px;background:radial-gradient(ellipse,rgba(0,255,85,0.55),rgba(0,0,0,0.6) 60%,transparent 80%);border-radius:50%;filter:blur(8px);transform:translateX(-50%) scale(0.2);opacity:0;z-index:0;pointer-events:none;}
+#lobby.entering #lobbyShadow{animation:lobby-shadow-grow-2d 2.5s ease-out both;}
+
+@keyframes walk-forward-2d{
+  0%   {transform:translateX(-50%) scale(0.4) translateY(0);   filter:brightness(0.2); opacity:0;}
+  20%  {opacity:1;}
+  25%  {transform:translateX(-50%) scale(0.55) translateY(-20px);}
+  50%  {transform:translateX(-50%) scale(0.7)  translateY(0);}
+  75%  {transform:translateX(-50%) scale(0.85) translateY(-20px);}
+  100% {transform:translateX(-50%) scale(1)    translateY(0);   filter:brightness(1.2); opacity:1;}
+}
+@keyframes lobby-aura-glow{
+  from {filter:drop-shadow(0 0 8px var(--power-green)) drop-shadow(0 0 4px var(--power-green));}
+  to   {filter:drop-shadow(0 0 30px var(--power-green)) drop-shadow(0 0 14px var(--power-green));}
+}
+@keyframes lobby-shadow-grow-2d{
+  0%   {transform:translateX(-50%) scale(0.15); opacity:0.05;}
+  100% {transform:translateX(-50%) scale(1.15); opacity:0.7;}
+}
+
+/* Screen flash when he arrives */
+#lobby::after{content:"";position:absolute;inset:0;background:var(--power-green);opacity:0;pointer-events:none;z-index:5;}
+#lobby.entering::after{animation:lobby-screen-flash 0.3s 2.4s ease-out;}
+@keyframes lobby-screen-flash{
+  0%{opacity:0;} 50%{opacity:0.3;} 100%{opacity:0;}
+}
+
 .stat-row{display:flex;gap:16px;margin-bottom:22px;}
 .stat{background:rgba(0,20,0,0.6);border:1px solid #00ff5533;border-radius:8px;padding:8px 14px;text-align:center;backdrop-filter:blur(6px);}
 .stat-v{font-size:18px;font-weight:700;color:#00ff55;}
@@ -177,6 +210,12 @@ body{background:#0a0e0a;font-family:'Courier New',monospace;overflow:hidden;widt
     <div class="stat"><div class="stat-v" id="sWins">0</div><div class="stat-l">WINS</div></div>
   </div>
   <!-- Character: bottom-center, only lower half (legs) visible -->
+  <div id="lobbyShadow"></div>
+  <div id="lobbyEntryFx">
+    <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+    <div class="speed s1"></div><div class="speed s2"></div><div class="speed s3"></div><div class="speed s4"></div>
+    <div class="dust d1"></div><div class="dust d2"></div><div class="dust d3"></div><div class="dust d4"></div>
+  </div>
   <canvas id="lobbyChar" width="280" height="380" style="position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);z-index:1;filter:drop-shadow(0 0 40px #00ff5580);"></canvas>
   <!-- PLAY button: bottom-right -->
   <div class="btn primary" id="btnPlay" style="position:absolute;bottom:28px;right:18px;width:150px;margin:0;z-index:2;background:rgba(0,255,85,0.18);box-shadow:0 0 18px #00ff5555;backdrop-filter:blur(4px);">▶ PLAY</div>
@@ -3721,7 +3760,16 @@ fbEl.addEventListener('mouseup',stopFire);
 // ============================================================
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  var el = document.getElementById(id);
+  el.classList.add('active');
+  if(id==='lobby'){
+    var lob = document.getElementById('lobby');
+    lob.classList.remove('entering');
+    // restart animation
+    void lob.offsetWidth;
+    lob.classList.add('entering');
+    setTimeout(function(){ lob.classList.remove('entering'); }, 2800);
+  }
 }
 
 // ---- INTRO SCREEN ----
@@ -4433,37 +4481,118 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
   var lobbyChairEl = null;
   var LOBBY_EMOTE_DUR = {laugh:4000, sit:5000, hi:4000};
 
-  // Create lobby emote buttons
+  // Single in-game style emote toggle + wheel
   var lobbyEmoteContainer = document.createElement('div');
   lobbyEmoteContainer.id = 'lobbyEmotes';
-  lobbyEmoteContainer.style.cssText = 'position:absolute;bottom:80px;left:50%;transform:translateX(-50%);z-index:3;display:flex;gap:12px;';
-  
-  var laughBtn = document.createElement('div');
-  laughBtn.className = 'btn';
-  laughBtn.style.cssText = 'width:auto;padding:8px 16px;font-size:12px;margin:0;';
-  laughBtn.textContent = '😂 LAUGH';
-  laughBtn.onclick = function(){ startLobbyEmote('laugh'); };
-  
-  var sitBtn = document.createElement('div');
-  sitBtn.className = 'btn';
-  sitBtn.style.cssText = 'width:auto;padding:8px 16px;font-size:12px;margin:0;';
-  sitBtn.textContent = '👑 THRONE';
-  sitBtn.onclick = function(){ startLobbyEmote('sit'); };
+  lobbyEmoteContainer.style.cssText = 'position:absolute;bottom:80px;left:50%;transform:translateX(-50%);z-index:3;display:flex;flex-direction:column;align-items:center;gap:8px;';
 
-  var hiBtn = document.createElement('div');
-  hiBtn.className = 'btn';
-  hiBtn.style.cssText = 'width:auto;padding:8px 16px;font-size:12px;margin:0;';
-  hiBtn.textContent = '👋 HI';
-  hiBtn.onclick = function(){ startLobbyEmote('hi'); };
-  
-  lobbyEmoteContainer.appendChild(laughBtn);
-  lobbyEmoteContainer.appendChild(sitBtn);
-  lobbyEmoteContainer.appendChild(hiBtn);
-  
+  var lobbyEmoteWheel = document.createElement('div');
+  lobbyEmoteWheel.id = 'lobbyEmoteWheel';
+  lobbyEmoteWheel.style.cssText = 'display:none;flex-direction:column;align-items:center;gap:6px;';
+  lobbyEmoteWheel.innerHTML = '<div style="color:#00ff55;font-size:9px;letter-spacing:3px;font-family:Courier New,monospace;margin-bottom:2px;">EMOTES</div>';
+
+  var lobbyWheelInner = document.createElement('div');
+  lobbyWheelInner.style.cssText = 'display:flex;gap:8px;align-items:center;';
+
+  function _mkEmoteBtn(emoji, label, type){
+    var b = document.createElement('div');
+    b.className = 'emote-btn';
+    b.style.cssText = 'width:58px;height:58px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:rgba(0,0,0,0.80);border:2px solid #00ff5555;font-size:22px;box-shadow:0 0 14px rgba(0,255,85,0.18);';
+    b.innerHTML = emoji + '<span style="font-size:7px;color:#aaa;letter-spacing:0.5px;font-family:Courier New,monospace;margin-top:1px;">'+label+'</span>';
+    b.onclick = function(e){ e.stopPropagation(); startLobbyEmote(type); _closeWheel(); };
+    return b;
+  }
+  lobbyWheelInner.appendChild(_mkEmoteBtn('😂','LAUGH','laugh'));
+  lobbyWheelInner.appendChild(_mkEmoteBtn('👑','THRONE','sit'));
+  lobbyWheelInner.appendChild(_mkEmoteBtn('👋','HI','hi'));
+  lobbyWheelInner.appendChild(_mkEmoteBtn('🚶','ENTRY','entry'));
+  lobbyEmoteWheel.appendChild(lobbyWheelInner);
+
+  var lobbyEmoteToggle = document.createElement('div');
+  lobbyEmoteToggle.id = 'lobbyEmoteToggle';
+  lobbyEmoteToggle.style.cssText = 'width:48px;height:48px;border-radius:50%;background:rgba(0,0,0,0.75);border:2px solid #00ff5555;color:#00ff55;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 10px rgba(0,255,85,0.15);';
+  lobbyEmoteToggle.textContent = '😄';
+
+  var _wheelOpen = false;
+  function _closeWheel(){ _wheelOpen = false; lobbyEmoteWheel.style.display='none'; lobbyEmoteToggle.style.borderColor='#00ff5555'; }
+  function _toggleWheel(){
+    _wheelOpen = !_wheelOpen;
+    lobbyEmoteWheel.style.display = _wheelOpen ? 'flex' : 'none';
+    lobbyEmoteToggle.style.borderColor = _wheelOpen ? '#ffd700' : '#00ff5555';
+  }
+  lobbyEmoteToggle.addEventListener('click', function(e){ e.stopPropagation(); _toggleWheel(); });
+  lobbyEmoteToggle.addEventListener('touchstart', function(e){ e.preventDefault(); e.stopPropagation(); _toggleWheel(); }, {passive:false});
+  document.addEventListener('click', function(){ if(_wheelOpen) _closeWheel(); });
+
+  lobbyEmoteContainer.appendChild(lobbyEmoteWheel);
+  lobbyEmoteContainer.appendChild(lobbyEmoteToggle);
+
   var lobbyScreen = document.getElementById('lobby');
   if(lobbyScreen) lobbyScreen.appendChild(lobbyEmoteContainer);
 
   function startLobbyEmote(type){
+    if(type==='entry'){
+      var lob=document.getElementById('lobby');
+      var lc=document.getElementById('lobbyChar');
+      var sh=document.getElementById('lobbyShadow');
+      lob.classList.remove('entering');
+      if(lc){ lc.style.animation='none'; }
+      if(sh){ sh.style.animation='none'; }
+      void lob.offsetWidth;
+      if(lc){ lc.style.animation=''; }
+      if(sh){ sh.style.animation=''; }
+      requestAnimationFrame(function(){
+        lob.classList.add('entering');
+        // animate walking legs/hands by redrawing canvas with oscillating bob
+        var startT = performance.now();
+        var DUR = 2500;
+        var sk = (typeof SKINS!=='undefined' && typeof G!=='undefined') ? (SKINS[G.skin]||SKINS[0]) : null;
+        function tick(now){
+          var t = now - startT;
+          if(!lc || !sk || t > DUR){
+            if(lc && typeof drawCharSVG!=='undefined' && typeof G!=='undefined') drawCharSVG(lc, G.skin);
+            return;
+          }
+          var ctx = lc.getContext('2d');
+          var w = lc.width, h = lc.height;
+          ctx.clearRect(0,0,w,h);
+          ctx.save();
+          var scale = w / 52;
+          ctx.translate(w/2, h * 0.72);
+          ctx.scale(scale, scale);
+          // walking bob — fast leg/hand swing
+          var bob = Math.sin(t/80) * 5;
+          if(typeof _drawCharDir==='function') _drawCharDir(ctx,'front',sk,0,bob);
+          // Glowing green eyes — ignite after 1.5s
+          if(t > 1500){
+            var ig = Math.min(1, (t-1500)/600);
+            var pulse = 0.85 + Math.sin(t/120) * 0.15;
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            var eyes = [[-5,-27],[5,-27]];
+            for(var i=0;i<2;i++){
+              var ex=eyes[i][0], ey=eyes[i][1];
+              // outer glow halo
+              var g = ctx.createRadialGradient(ex,ey,0, ex,ey, 9*pulse);
+              g.addColorStop(0,'rgba(120,255,120,'+(0.95*ig)+')');
+              g.addColorStop(0.4,'rgba(57,255,20,'+(0.55*ig)+')');
+              g.addColorStop(1,'rgba(57,255,20,0)');
+              ctx.fillStyle = g;
+              ctx.beginPath(); ctx.arc(ex,ey,9*pulse,0,Math.PI*2); ctx.fill();
+              // bright core
+              ctx.fillStyle='rgba(220,255,220,'+ig+')';
+              ctx.beginPath(); ctx.ellipse(ex,ey,2.2*pulse,1.4*pulse,0,0,Math.PI*2); ctx.fill();
+            }
+            ctx.restore();
+          }
+          ctx.restore();
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+        setTimeout(function(){ lob.classList.remove('entering'); }, 2800);
+      });
+      return;
+    }
     lobbyEmoteActive = type;
     lobbyEmoteStart = Date.now();
     if(type==='sit') _createLobbyChair();
@@ -8345,4 +8474,3 @@ if(!CanvasRenderingContext2D.prototype.roundRect){
 </script>
 </body>
 </html>
-
